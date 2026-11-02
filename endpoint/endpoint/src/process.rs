@@ -331,6 +331,83 @@ pub fn sandbox() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn sandbox_blocks_files_sockets_exec_and_executable_memory() {
+        // Raw system calls only between fork and _exit: the test harness has other threads.
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0);
+        if pid == 0 {
+            let code = unsafe {
+                let denied = |r: libc::c_long| r == -1 && *libc::__errno_location() == libc::EPERM;
+                if sandbox().is_err() {
+                    1
+                } else if !denied(libc::syscall(
+                    libc::SYS_socket,
+                    libc::AF_INET,
+                    libc::SOCK_STREAM,
+                    0,
+                )) {
+                    2
+                } else if !denied(libc::syscall(
+                    libc::SYS_openat,
+                    libc::AT_FDCWD,
+                    c"/".as_ptr(),
+                    libc::O_RDONLY,
+                )) {
+                    3
+                } else if !denied(libc::syscall(
+                    libc::SYS_execve,
+                    c"/bin/true".as_ptr(),
+                    std::ptr::null::<*const libc::c_char>(),
+                    std::ptr::null::<*const libc::c_char>(),
+                )) {
+                    4
+                } else if libc::mmap(
+                    std::ptr::null_mut(),
+                    4096,
+                    libc::PROT_READ | libc::PROT_EXEC,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                ) != libc::MAP_FAILED
+                {
+                    5
+                } else if libc::mmap(
+                    std::ptr::null_mut(),
+                    4096,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                ) == libc::MAP_FAILED
+                {
+                    6
+                } else if !denied(libc::syscall(
+                    libc::SYS_clone,
+                    libc::SIGCHLD as libc::c_long,
+                    0,
+                    0,
+                    0,
+                    0,
+                )) {
+                    7
+                } else {
+                    0
+                }
+            };
+            unsafe { libc::_exit(code) };
+        }
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(libc::WIFEXITED(status), "sandboxed child died: {status:#x}");
+        assert_eq!(libc::WEXITSTATUS(status), 0, "check that failed");
+    }
+    fn shell(script: &str, ms: u64) -> Verdict {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", script]);
+        run(cmd, Duration::from_millis(ms), b"")
+    }
     #[test]
     fn successful_exit_and_one_marker_are_both_required() {
         assert_eq!(shell("printf 'accept\\n'", 1000), Verdict::Accept);
