@@ -9,12 +9,16 @@
 # line). The observer runs with /usr/bin/python3: on macOS a Homebrew Python may lack Local Network access.
 # PERIOD_MS: send one request every PERIOD_MS on one connection without waiting (observer --period-ms), as the
 # server's load_bits mode expects; a run where the server logged a late send counts as failed.
+# CLIENTS (default 1): with more, N rounds of one request per connection (observer --clients, GAP_MS apart,
+# default 2), so N * CLIENTS answers; observer/by_admission.py puts them in admission order for analysis.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 OUT="${OUT:-runs}"
 IMAGE_SHA="${IMAGE_SHA:?sha256 of the flashed image}"
 LABEL="${LABEL:-}"
 PERIOD_MS="${PERIOD_MS:-}"
+CLIENTS="${CLIENTS:-1}"
+GAP_MS="${GAP_MS:-2}"
 [[ "${3:-}" == "--" ]] || { echo "usage: $0 NAME N -- prover/server.py args..."; exit 2; }
 NAME=$1 N=$2; shift 3
 [[ "$NAME" =~ ^[A-Za-z0-9_]+$ ]] || { echo "bad NAME"; exit 2; }
@@ -22,6 +26,8 @@ NAME=$1 N=$2; shift 3
 [[ "$IMAGE_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "bad IMAGE_SHA"; exit 2; }
 [[ "$LABEL" =~ ^[A-Za-z0-9_-]*$ ]] || { echo "bad LABEL"; exit 2; }
 [[ -z "$PERIOD_MS" || "$PERIOD_MS" =~ ^[1-9][0-9]{1,4}$ ]] || { echo "bad PERIOD_MS"; exit 2; }
+[[ "$CLIENTS" =~ ^[1-9][0-9]?$ && "$GAP_MS" =~ ^[0-9]{1,3}$ ]] || { echo "bad CLIENTS or GAP_MS"; exit 2; }
+[[ -z "$PERIOD_MS" || "$CLIENTS" == 1 ]] || { echo "PERIOD_MS and CLIENTS can't be combined"; exit 2; }
 [[ -z "$(git status --porcelain)" ]] || { echo "$NAME: the checkout has changes; commit them first"; exit 2; }
 COMMIT="$(git rev-parse HEAD)"
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -44,20 +50,24 @@ done
 [ $ok = 1 ] || { echo "$NAME: the endpoint did not connect"; exit 1; }
 # Each answer can take up to the 4 s release time plus a check, so the client's limit grows with N.
 limit=$(( N * 7 + 120 ))
-timeout "$limit" /usr/bin/python3 observer/client.py 192.168.2.2 8700 "$X" --n "$N" ${PERIOD_MS:+--period-ms "$PERIOD_MS"} \
+WANT=$(( N * CLIENTS ))
+MULTI=()
+[[ "$CLIENTS" == 1 ]] || MULTI=(--clients "$CLIENTS" --gap-ms "$GAP_MS")
+timeout "$limit" /usr/bin/python3 observer/client.py 192.168.2.2 8700 "$X" --n "$N" ${PERIOD_MS:+--period-ms "$PERIOD_MS"} ${MULTI[@]+"${MULTI[@]}"} \
   > "$OUT/$NAME.trace.jsonl" 2>"$OUT/$NAME.client.err"
 rc=$?
 rows=$(wc -l < "$OUT/$NAME.trace.jsonl" | tr -d ' ')
 late=$(grep -c ' ms late$' "$OUT/$NAME.server.log")
 status=ok
-[[ $rc == 0 && $rows == "$N" && $late == 0 ]] || status=failed
-PERIOD_MS="$PERIOD_MS" LATE="$late" NAME="$NAME" N="$N" COMMIT="$COMMIT" STARTED="$STARTED" RC="$rc" ROWS="$rows" STATUS="$status" IMAGE_SHA="$IMAGE_SHA" LABEL="$LABEL" \
+[[ $rc == 0 && $rows == "$WANT" && $late == 0 ]] || status=failed
+CLIENTS="$CLIENTS" GAP_MS="$GAP_MS" PERIOD_MS="$PERIOD_MS" LATE="$late" NAME="$NAME" N="$N" COMMIT="$COMMIT" STARTED="$STARTED" RC="$rc" ROWS="$rows" STATUS="$status" IMAGE_SHA="$IMAGE_SHA" LABEL="$LABEL" \
   /usr/bin/python3 -I -c '
 import json, os, sys
 e = os.environ
 m = {"name": e["NAME"], "target": "v1 image", "image_sha256": e["IMAGE_SHA"], "label": e["LABEL"], "n": int(e["N"]),
      "commit": e["COMMIT"], "started": e["STARTED"], "client_exit": int(e["RC"]), "rows": int(e["ROWS"]),
-     "status": e["STATUS"], "server_args": sys.argv[1:], "period_ms": e["PERIOD_MS"], "server_late_sends": int(e["LATE"])}
+     "status": e["STATUS"], "server_args": sys.argv[1:], "period_ms": e["PERIOD_MS"], "server_late_sends": int(e["LATE"]),
+     "clients": int(e["CLIENTS"]), "gap_ms": int(e["GAP_MS"])}
 print(json.dumps(m))' "$@" > "$OUT/$NAME.manifest.json" || status=failed
-echo "$NAME: client exit $rc rows $rows/$N $status"
+echo "$NAME: client exit $rc rows $rows/$WANT $status"
 [[ $status == ok ]]
