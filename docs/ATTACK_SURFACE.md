@@ -55,7 +55,7 @@ Not a way into the running device, but whoever controls a build machine controls
 | Laptop VM (Lima, Ubuntu) running `image/build.sh` | the SD-card image: kernel, Buildroot user space, our overlay | Buildroot tarball sha256 pinned from its signed release; Buildroot's Pi config sets `BR2_DOWNLOAD_FORCE_CHECK_HASHES`, so every downloaded source (the Pi kernel included) must match a hash shipped in that tarball; after the build, checks that every config line survived and that no login, module or getty is left |
 | Laptop (signing keys) | signed updates (`image/make_update.sh`) | the spec keeps the root key offline (`docs/UPDATE_SPEC.md`); the demo keys used so far are plain files on the laptop |
 
-**Gaps.** The image build is not reproducible and runs on one machine: a compromised VM or compiler can change the image after every check passes, and nothing on the device would notice (no secure boot). The VM image and host compilers are not pinned. Fix planned: build the image a second time on a clean CI runner and require the same sha256 (or record exactly which files differ and why).
+**Gaps.** A second build on a clean GitHub runner (`.github/workflows/image.yml`) matched the laptop's build file by file except for build metadata (2 Nov; the book's Measurements page, attack surface). That checks the user space, but not the kernel: it embeds the build host, time and a signing certificate generated at each build, so a compromised build machine could still change the kernel unnoticed until the build is made reproducible. The host compilers and the VM image are not pinned, and nothing on the device checks what it boots (no secure boot).
 
 ## The end state (design)
 

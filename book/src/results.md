@@ -78,6 +78,8 @@ Other runs the same day at 256 MiB: one first check, then 200/200 and 10/10, so 
 | v1 development image (16 Oct, `sdcard.img` 159 MB) | 0 of 65,535 TCP ports open; top 100 UDP ports closed; no IPv6 | **No endpoint was running on this image yet**, so this shows a quiet base system, not a working hardened endpoint |
 <!-- ANCHOR_END: attack-surface -->
 
+**Two independent builds of the image (2 Nov).** The 2 Nov hardened image was built twice from the same `image/` files and the same CI endpoint binary: once in the laptop's Linux VM, once on a clean GitHub runner (`.github/workflows/image.yml`, the update signed with a throwaway key), and every file compared (`image/manifest.sh`). 779 of 796 files are identical, the endpoint binary and every configuration file among them. 5 differ by design (the throwaway key: `root.pub`, the key list, two signatures and the store state). The other 12 differ only in build metadata: BusyBox's build time, a padded build-directory string in 9 xz, kmod and nftables binaries and libraries (4 characters shorter on the runner, as its build directory is), host paths in a gdb helper script, and the kernel (its user@host, build number, time and the module-signing certificate generated at each build, which shift the rest of the file). So the user space checks out file by file, but the kernel can't be compared byte for byte until the build is made reproducible (fixed build time and path, and a way to handle the generated signing key).
+
 ## The Rust endpoint on the Pi (29 Oct)
 
 The device now runs the Rust endpoint (static 64-bit ARM binary from CI, no Python or EZKL CLI on the device). Same Pi and setup as above; raw data in the git-ignored `runs/2026-10-29_rust/`.
