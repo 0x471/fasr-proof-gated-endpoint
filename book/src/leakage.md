@@ -37,6 +37,20 @@ These bounds hold only for that observation (failures only) and that policy; tim
 
 {{#include results.md:failure-scaling}}
 
+## Questions people ask
+
+**Why not just release every answer exactly 4 seconds after its question?** That is what the fixed rule does. The clock starts when the question arrives at the endpoint, and the answer leaves at that moment plus the budget, whatever the server did; if the server's answer isn't checked by then, the reply is "unavailable" instead, which is the failure channel. The leftover trace was not in that schedule but in how precisely the computer acts on it: waking a sleeping program and pushing a packet out takes slightly different time depending on what the processor was doing just before. When the server answered late, the endpoint had just been busy checking that proof; when it answered early, the endpoint had been idle for seconds. That is our leading explanation, not yet isolated. Waking a few milliseconds early and busy-waiting until the exact moment (the "spin") removed the difference we could see, and on the stripped image one run of the same test showed nothing.
+
+**How can a few failures carry many bits?** The message is in which answer fails, not in how many. If one answer in each batch of 16 fails, its position (one of 16) carries 4 bits. Longer messages need proportionally more failures or longer batches; the table above shows the trade-off, and a cap limits any such code.
+
+**Can the server hide bits in the network packets themselves (packet sizes, TCP header fields)?** Not directly. The endpoint keeps separate connections: its own connection to the server, and one with each outside client. Nothing the server sends is forwarded as packets. It reads each message, keeps only the checked output values, and writes a new reply of a fixed size. So the server never touches the outside packets' headers or sizes. What it still controls is when it answers, which answers fail, and how busy it keeps the endpoint. Whether those choices show up in packet-level details on the outside link hasn't been measured yet (see below).
+
+**What was the fuzzing for?** A parser is the code that reads an incoming message (a question from a client, an answer from the server). The fuzz test throws thousands of random and corrupted messages at each one and checks that every one is either refused or, if accepted, writes back to exactly the same bytes. That makes sure malformed input can't crash or confuse the endpoint, and that a message has only one accepted form, so extra bytes or alternative encodings can't carry hidden data. It is not a timing test.
+
+**Does this depend on EZKL or on the Raspberry Pi?** Partly. How a proof is tied to its question (the binding rules) is specific to EZKL and must be redone for any other proof system. The side-channel defences (fixed-size messages, release in arrival order or at a fixed time, the failure cap) don't depend on the proof system. What the timing defence achieves does depend on the hardware and operating system, which is why it was measured on the stock system and on the stripped image separately.
+
+**What about physical attacks?** Out of scope: the device is assumed to sit inside the data centre's physical security. Basic measures (secure boot, a TPM, a counter that can't be rolled back) are planned as a design, not as a defence against someone with the board in hand.
+
 ## What this doesn't show
 
 - These are the rates **one particular** hiding method achieved, not the most any method could achieve.
