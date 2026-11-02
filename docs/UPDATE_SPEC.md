@@ -85,4 +85,4 @@ An installed update is not yet in use: **installed** (on disk), **validated** (t
 - **Power loss**: the install order was tested by killing the installer at each step (outside review, macOS), not by cutting power on the Pi's ext4.
 - `--idle` (how long a silent client is kept) is still a flag, not part of the signed policy.
 - One signature per manifest; two-party signing (for example the lab and an auditor) is a small extension.
-- No delivery path on the device yet: a new update means a new image, or stopping the endpoint and running `--apply-update` from the serial console with the update on removable media. A management port or the serial console is the plan.
+- No delivery path on the device: the image has no login (from the 2 Nov rebuild). A new update means a new image (`image/build.sh` applies it with the device's own binary), or applying it to the card's store on another Linux machine with the same `--apply-update`, where the same rules hold because the state lives on the card. A management port is future work.
