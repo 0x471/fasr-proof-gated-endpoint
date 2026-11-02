@@ -9,18 +9,21 @@
 
 Two machines and two network links. Today the laptop plays both the AI server and the outside observer, and the Pi runs the endpoint. The endpoint listens only on the outside link and dials out to the server itself, so it has no listener for the server to connect to.
 
-![The laptop runs the observer and the AI server; the Pi runs the endpoint service, which reads a pinned bundle, runs the EZKL CLI in a limited child process per check, and writes fixed-word logs](diagrams/architecture.svg)
+![The laptop runs the observer and the AI server; the Pi runs the endpoint, one static Rust binary that reads its model files and release policy from a signed store, checks each proof in a limited and sandboxed child process, and writes fixed-word logs](diagrams/architecture.svg)
 
-| Piece | File | Job |
-|---|---|---|
-| Endpoint service | `pge/service.py` | Admits questions, forwards them, checks answers, decides when replies leave |
-| Message format | `pge/protocol.py` | Fixed-size binary frames; strict parsing |
-| Binding | `pge/binding.py`, `pge/bundle.py`, `pge/domain.py` | Encodes questions like EZKL, pins the model, decodes proven outputs, refuses impossible questions |
-| Checker | `pge/cli.py`, `pge/proc.py`, `pge/verdict.py` | Runs EZKL's command-line tool under limits and turns its output into a verdict |
-| Server | `prover/server.py` | Proves each question with EZKL; can misbehave on purpose (tamper, replay, delay, hide bits) |
-| Observer | `observer/client.py` | Sends questions, records each reply and its arrival time, decodes hidden bits |
+The device runs the Rust endpoint in `endpoint/`, one static binary with no Python and no EZKL command-line tool. The Python endpoint in `pge/` is the reference it is tested against, reply for reply; the function names in the tables below are the Python ones, and the Rust crates mirror them.
 
-Today both links share one Ethernet cable, so the separation between the server side and the outside side is only by address. The v1 image gives the Pi a second wired port so the two sides are physically separate and nothing is forwarded between them.
+| Piece | Device (Rust) | Reference (Python) | Job |
+|---|---|---|---|
+| Endpoint loop | `endpoint/endpoint` | `pge/service.py` | Admits questions, forwards them, checks answers, decides when replies leave |
+| Release rules and failure cap | `endpoint/core` | `pge/service.py`, `observer/cap_model.py` | A deterministic state machine: arrival or fixed release, halt, cap |
+| Message format | `endpoint/wire` | `pge/protocol.py` | Fixed-size binary frames; strict parsing; one accepted form |
+| Binding and checker | `endpoint/verify` | `pge/binding.py`, `pge/bundle.py`, `pge/domain.py`, `pge/cli.py` | Encodes questions like EZKL, pins the model, verifies with EZKL's library, decodes proven outputs |
+| Signed updates | `endpoint/update` | none | Accepts a new model and policy only if signed, newer and for this device |
+| Server | `prover/server.py` | | Proves each question with EZKL; can misbehave on purpose (tamper, replay, delay, hide bits) |
+| Observer | `observer/client.py` | | Sends questions, records each reply and its arrival time, decodes hidden bits |
+
+Today both links share one Ethernet cable, so the separation between the server side and the outside side is only by address. A board with a second wired port (planned) makes the two sides physically separate, with nothing forwarded between them.
 
 ## The life of one question
 
@@ -76,25 +79,28 @@ Full rules and test vectors: [Request binding specification](binding-spec.md).
 
 ## The checker
 
-The cryptography is done by EZKL's official command-line tool (23.0.5 for 64-bit ARM, download checked against its published digest; Raspberry Pi OS has no EZKL Python package). The endpoint has to trust its verdict, since it can't tell if the tool wrongly says yes, but it contains the tool's failures: one short-lived process per check, boxed in by limits, whose only way to say yes is a strict exit code and log line.
+The cryptography is EZKL's verifier (23.0.5), compiled into the endpoint as a library. The endpoint has to trust its verdict, since it can't tell if the verifier wrongly says yes, but it contains the verifier's failures: each check runs in a fresh, short-lived child process (the same binary started with `--verify-child`), boxed in by limits, whose only way to say yes is a strict exit code and one word.
 
-![The endpoint service starts a fresh single-threaded launcher with a minimal environment; the launcher sets resource limits and replaces itself with the EZKL CLI; output comes back through a pipe capped at 64 KiB; a watchdog kills the whole process group at the deadline](diagrams/checker.svg)
+![The endpoint starts a fresh child of the same binary with a minimal environment and sends it the model files and the proof on a pipe; the child lowers its resource limits, installs a system-call allow-list, verifies with EZKL's library and answers with one word, capped at 64 KiB; a watchdog kills the whole process group at the deadline](diagrams/checker.svg)
 
 | Limit | Value | Why |
 |---|---|---|
 | Address space (Linux only) | 256 MiB | Stops a proof that makes the verifier allocate without bound |
 | CPU time | up to the deadline | A second stop for a busy loop, besides the wall-clock deadline |
-| File size | 0 | Verify writes no files; a CLI that tries is killed (this doesn't stop it deleting files) |
+| File size | 0 | The check writes no files |
 | Open files | 64 | Bounds file-handle exhaustion |
 | Core dumps | off | No memory dumps on disk |
+| System calls (Linux) | an allow-list of the calls a check was traced making | No files, sockets, programs, new processes or executable memory; another architecture's calls kill it |
 | Threads | Rayon set to 1 (a setting, not an OS limit) | Less memory, steadier timing |
 | Output | 64 KiB, then SIGKILL | A flooding child can't exhaust the endpoint |
 | Wall time | the time left until the deadline | Then SIGKILL of the whole process group |
 
-- **Why a launcher and not `preexec_fn`:** the endpoint is multithreaded, and running Python code between fork and exec in a threaded program can deadlock. A fresh single-threaded interpreter sets the limits and then replaces itself with the CLI.
-- **Verdicts** (`classify_cli`): ACCEPT needs exit 0, no error line and exactly one "verified: true"; REJECT needs exit 1, one "verified: false" and exactly one `[halo2]` error; everything else is ERROR. Only ACCEPT releases an answer, and ERROR counts as a server failure, never as a pass.
+- **Why a child process:** a crash, a runaway allocation or a hang in the verifier ends only that child. The child reads the model files and the proof from its pipe and re-checks the files' hashes, so it needs no file access at all.
+- **Verdicts:** ACCEPT needs exit 0 and exactly `accept`; REJECT needs exit 1 and exactly `reject`; anything else, including a killed child, is ERROR. Only ACCEPT releases an answer, and ERROR counts as a server failure, never as a pass.
 - **Memory:** {{#include results.md:memory}}
-- **What it isn't:** a sandbox. Limits are per process; a separate user and a read-only system come with the v1 image.
+- **What it isn't:** a check of the verifier's correctness. A bug that makes it say ACCEPT for a bad proof is not contained; the allow-list only stops a taken-over checker from reaching anything outside itself.
+
+The Python reference endpoint does the same with EZKL's command-line tool instead of the library.
 
 **What a check costs on the Pi** (medians of 20, 19 October):
 
@@ -143,23 +149,25 @@ Bugs found by review in this part, all fixed with tests that fail on the old cod
 
 ## From v0 to v2
 
-The same endpoint is built three times, each version removing a way in, and measured the same way each time. Today v0 is measured, the v1 software runs on v0's operating system, and the v1 image boots but doesn't carry the endpoint yet.
+The same endpoint is built three times, each version removing a way in, and measured the same way each time. v0 and v1 are measured on the Pi; v2 is planned.
 
-![v0 baseline: stock Raspberry Pi OS with ssh and mDNS listening; v1 stripped: a Buildroot image with only the endpoint, read-only, two ports, no remote login; v2 hardened: secure boot, signed versioned updates, fixed time slots and a hash-chained log](diagrams/ladder.svg)
+![v0 baseline: stock Raspberry Pi OS with the Python endpoint and the EZKL CLI, ssh and mDNS listening; v1 stripped: a Buildroot image with one static Rust endpoint, read-only, one open port behind a firewall, signed updates, no login; v2 locked: secure boot, two physical ports, a TPM counter and signed images](diagrams/ladder.svg)
 
-|  | v0 (measured) | v1 (in progress) | v2 (planned) |
+|  | v0 (measured) | v1 (measured) | v2 (planned) |
 |---|---|---|---|
-| Operating system | Raspberry Pi OS Lite (Debian 13) | Buildroot 2025.02.18 LTS: kernel 6.6, BusyBox init, glibc 2.41, Python 3.12 | as v1, inside a signed boot image |
-| Network | one port | two wired ports, static addresses, nothing forwarded | as v1 |
-| Updates | copy files over ssh | swap the SD card | signed, versioned packages with a rollback rule |
-| Debug access | ssh, HDMI | serial console only | as v1 |
+| Operating system | Raspberry Pi OS Lite (Debian 13) | Buildroot 2025.02.18 LTS: kernel 6.6, BusyBox init, read-only root; the endpoint is one static binary | as v1, inside a signed boot image |
+| Endpoint | Python, EZKL command-line tool | Rust, EZKL verifier as a library, unprivileged user, sandboxed checker | as v1 |
+| Network | one port, ssh and mDNS listening | one open port behind a firewall built into the kernel; the endpoint won't start without its rules | two physical ports, nothing forwarded |
+| Updates | copy files over ssh | signed model and policy in a store on a data partition; a new update comes as a new image or is applied to the card offline | as v1, plus a counter that can't roll back |
+| Login | ssh, HDMI, serial | none (from the 2 Nov rebuild; until then a console login) | none |
 
 What each one exposes, measured:
 
 {{#include results.md:attack-surface}}
 
-- **How the v1 image is built** (`image/build.sh`, on a Linux VM because Buildroot doesn't build on macOS): download the Buildroot release and check its SHA-256, start from `raspberrypi4_64_defconfig`, add glibc (the EZKL CLI needs it) and Python 3 (`image/v1.fragment`), check every added option survived, build `sdcard.img`. Defaults still to fix: an empty root password on the console, DHCP instead of fixed addresses, and crond.
-- **What v1 still needs:** the endpoint and the pinned bundle inside the image, a read-only system, a separate unprivileged user for the checker, a small log partition, the second port, and a serial console for debugging.
+- **How the v1 image is built** (`image/build.sh`, on a Linux VM because Buildroot doesn't build on macOS): download the Buildroot release and check its SHA-256, start from `raspberrypi4_64_defconfig`, add the static endpoint, the firewall and a fixed address (`image/v1.fragment`), apply the signed update into the store exactly as the device would, and check that every added option, kernel option included, survived the build.
+- **The 2 Nov rebuild** adds a locked-down kernel (no loadable modules, kernel lockdown, no raw memory, debugger or tracing interfaces, no IPv6, radios, sound or USB; `image/kernel.fragment`) and removes every login prompt. Its check on the Pi is pending.
+- **What v1 still lacks:** the second port, and a way to deliver an update on the device itself.
 
 **Secure boot (v2, planned):**
 
@@ -188,8 +196,8 @@ Signals the server controls even with valid proofs:
 | What an answer says | proof + binding | blocked for the test model |
 | Order of replies | arrival-order release | the ordering code we tried no longer gets through (one connection) |
 | Timing | fixed release time, plus spin | much reduced; see below |
-| Which answers fail | a cap on failures per window (in the Rust endpoint; not yet measured on the Pi) | open |
-| Reply size | fixed-size replies | blocked at the message level; TCP packets are still the stock OS's |
+| Which answers fail | a cap on failures per window (Rust endpoint) | reduced at a large cost in availability; measured once on the Pi |
+| Reply size | fixed-size replies | blocked at the message level; packet-level details on the outside link not measured |
 | Logs | fixed words only | the number and timing of events still follow the server |
 | Keeping the endpoint busy | fixed time slots (planned) | open |
 
