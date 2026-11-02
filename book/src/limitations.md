@@ -10,7 +10,7 @@
 - **Two physical ports.** The v1 image runs the endpoint, but the server side and the outside still share one cable; a board with a second wired port is planned.
 - **v2:** secure boot (which permanently writes a key into the board, so it needs a spare board); a TPM counter so a whole older copy of the update store can't be restored (K43); a power-loss test of update installation on the Pi's file system; a hash-chained log sent to a separate collector.
 - **Update delivery on the device.** The image has no login; a new update comes as a new image or is applied to the card's store on another machine, where the same rollback and replay rules apply because the state lives on the card.
-- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and one Pi run showed far fewer hidden bits getting out at a large cost in availability ([Measurements](results.md)). Timing needs its own accounting. The cap's count lives in memory, so it bounds failures per boot: any restart starts a fresh window (K50).
+- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and on the Pi (pre-registered, cap versus stopping) far fewer hidden bits got out, at a cost in availability while the server keeps failing ([Measurements](results.md)). Timing needs its own accounting. The cap's count lives in memory, so it bounds failures per boot: any restart starts a fresh window (K50).
 
 ## Not measured yet
 

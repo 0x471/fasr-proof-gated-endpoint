@@ -16,7 +16,7 @@ Everything here was measured on one Raspberry Pi 4 (2 GB, Raspberry Pi OS Lite, 
 | Change what an answer says | Blocked by the proof | Blocked | Each check takes about 0.24 s on the Pi |
 | Reorder answers | Leaks | **The ordering code we tried no longer gets through**: answers leave in the order questions arrived | A slow answer delays the ones behind it |
 | Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive on the stock system and found nothing on the stripped image (one run) | Answers take 4.0 s instead of about 0.8 s |
-| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 4 of 16 planted bits got out instead of 16/16 (one run) | 18 of 64 answers ok instead of 60 of 64 |
+| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 8 of 32 planted bits got out instead of 32/32; stopping at the first failure got nothing readable out (pre-registered, 2 Nov) | with the cap, 54 of 128 answers ok instead of 120 while the server keeps failing (an honest server loses none); stopping answers nothing after the first failure |
 <!-- ANCHOR_END: findings -->
 
 **How to read the leakage numbers.** The server hides known bits and an observer tries to read them back with a fixed decoder. "16/16" means every planted bit was recovered. When the decoder fails, the table says how many bits it got wrong; that means this decoder did not recover that message in that run, not that the encoding carries no information or that nothing leaks. These are achieved rates for one encoder each, from one sequential client unless stated; they are not capacity bounds.
@@ -244,6 +244,20 @@ Both pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`, run on the 2 Nov hardene
 | 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | **inconclusive**: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
 
 What protocol 4 doesn't cover: several checks stacked across one release, flooding, and checker and event loop forced onto one core.
+
+### Failure cap versus stopping (2 Nov, protocol 3)
+
+Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`: the stock system with the Rust endpoint (`f8b56ec` CI binary, `6f7f8702...`), fixed release 4 s, 5 ms spin, one client, 128 answers per run; the server hides 32 random bits in which answer of each 16 fails. Every reply of every run matched the reference model (`observer/cap_model.py`) exactly.
+
+| Failure policy | Planted bits read back (of 32) | Answers ok (of 128) | At most, for any failure code (`observer/cap_bound.py`) |
+|---|---|---|---|
+| No cap | 32 (no errors) | 120 | 128 bits (one per answer) |
+| Cap: 1 failure per 64 replies, then 64 unavailable | 8 | 54 | 19.48 bits |
+| Cap: 2 failures per 64 replies, then 32 unavailable | 12 | 62 | 34.99 bits |
+| Stop after the first failure | none (the first answer failed, and nothing was answered after it) | 0 | the stopping position: at most log2(129) = 7.0 bits, once, until someone restarts it |
+| Honest server, same cap as the second row | (no bits planted) | 128 | |
+
+So stopping leaks least but hands the server an off switch, and a cap keeps the device answering at a cost that only an attacker's failures trigger.
 
 ## What these results don't show
 

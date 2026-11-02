@@ -197,7 +197,7 @@ Signals the server controls even with valid proofs:
 | What an answer says | proof + binding | blocked for the test model |
 | Order of replies | arrival-order release | the ordering code we tried no longer gets through (one connection) |
 | Timing | fixed release time, plus spin | much reduced; see below |
-| Which answers fail | a cap on failures per window (Rust endpoint) | reduced at a large cost in availability; measured once on the Pi |
+| Which answers fail | a cap on failures per window (Rust endpoint) | reduced at a cost in availability; measured on the Pi against stopping at the first failure |
 | Reply size | fixed-size replies | blocked at the message level; packet-level details on the outside link not measured |
 | Logs | fixed words only; no more records for late, repeated or unasked-for answers than questions asked (K51) | the number and timing of events still follow the server |
 | Keeping the endpoint busy | fixed release: each question keeps its place until its release time | under fixed release, which users get `unavailable` for a full queue doesn't depend on the server (state-machine test, K17); open in arrival order; whether timed load moves releases (K34) is not measured yet |

@@ -33,7 +33,7 @@ No release rule can stop deliberate failures, because a failure looks like a rea
 - Over a window of N answers, if the observer only sees which answers failed and the endpoint allows at most F failures, the server can choose among at most C(N,0) + C(N,1) + ... + C(N,F) patterns, so it can send at most log2 of that many bits per window.
 - Stopping the endpoint at the first failure in a window of N answers leaves N + 1 outcomes (no failure, or a failure at one of N positions), so at most log2(N + 1) bits per window, but only if someone decides when the endpoint restarts; and it lets the server switch the endpoint off whenever it wants.
 
-These bounds hold only for that observation (failures only) and that policy, and per boot: the count lives in memory, so a restart starts a fresh window (K50). Timing needs its own accounting. The Rust endpoint now has such a cap, and one run on the Pi showed the trade-off: far fewer hidden bits got out, but many honest answers were refused too (numbers in [Measurements](results.md)). How the failure code scales with longer messages:
+These bounds hold only for that observation (failures only) and that policy, and per boot: the count lives in memory, so a restart starts a fresh window (K50). Timing needs its own accounting. The Rust endpoint now has such a cap, and on the Pi a 32-bit message got 8 or 12 bits out under two cap settings, while answers kept failing during the cooldowns; an honest server under the same cap lost no answers, and stopping at the first failure let nothing readable out but answered nothing more (pre-registered; numbers in [Measurements](results.md)). How the failure code scales with longer messages:
 
 {{#include results.md:failure-scaling}}
 

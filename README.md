@@ -28,7 +28,7 @@ A valid proof stops the server from changing **what** an answer says. It doesn't
 | Change what an answer says | Blocked by the proof | Blocked | Each check takes about 0.24 s on the Pi |
 | Reorder answers | Leaks | **The ordering code we tried no longer gets through**: answers leave in the order questions arrived | A slow answer delays the ones behind it |
 | Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive on the stock system and found nothing on the stripped image (one run) | Answers take 4.0 s instead of about 0.8 s |
-| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 4 of 16 planted bits got out instead of 16/16 (one run) | 18 of 64 answers ok instead of 60 of 64 |
+| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 8 of 32 planted bits got out instead of 32/32; stopping at the first failure got nothing readable out (pre-registered, 2 Nov) | with the cap, 54 of 128 answers ok instead of 120 while the server keeps failing (an honest server loses none); stopping answers nothing after the first failure |
 <!-- END findings -->
 
 Measured on a real Raspberry Pi 4 with one client at a time and one tiny test model; the rates are for the encoders we tried, not limits on what an attacker could do. Every scenario we catalogued, with its evidence, is in the [attack catalogue](docs/ATTACKS.md).
