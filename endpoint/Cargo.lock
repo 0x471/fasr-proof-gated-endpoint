@@ -1100,7 +1100,9 @@ dependencies = [
 name = "pge-fuzz"
 version = "0.0.0"
 dependencies = [
+ "k256",
  "libfuzzer-sys",
+ "pge-update",
  "pge-verify",
  "pge-wire",
 ]

@@ -11,6 +11,8 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 pge-wire = { path = "../wire" }
 pge-verify = { path = "../verify" }
+pge-update = { path = "../update" }
+k256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 
 [[bin]]
 name = "wire"
@@ -22,6 +24,20 @@ bench = false
 [[bin]]
 name = "verifier_input"
 path = "fuzz_targets/verifier_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_text"
+path = "fuzz_targets/update_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_state"
+path = "fuzz_targets/update_state.rs"
 test = false
 doc = false
 bench = false

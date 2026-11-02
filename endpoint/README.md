@@ -108,8 +108,13 @@ For fuzzing, install cargo-fuzz on the build machine and run from `endpoint/`:
 ```sh
 cargo +nightly-2025-12-01 fuzz run wire -- -runs=10000
 cargo +nightly-2025-12-01 fuzz run verifier_input -- -runs=10000
+cargo +nightly-2025-12-01 fuzz run update_text -- -max_total_time=600
+cargo +nightly-2025-12-01 fuzz run update_state -- -max_total_time=600
 ```
 
+`update_text` checks that every accepted manifest and state file has exactly one written form; `update_state` signs
+updates with fuzzer-chosen versions and checks that any stored state only ever moves forward. Their seed inputs
+come from `fuzz/seeds.py` (`python3 fuzz/seeds.py fuzz/corpus`).
 These bounded runs are smoke checks, not evidence that parsing is exhaustive.
 The CI workflow builds and tests native Linux targets and a static aarch64
 musl binary. Target execution and deployment measurements belong in the
