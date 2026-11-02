@@ -64,4 +64,4 @@ The image has no login, so nothing is started on the Pi: build and flash it, and
 
 ## Server modes
 
-`prover/server.py --mode` makes the AI server misbehave: `honest`, `drop`, `delay`, `tamper_output`, `replay`, `duplicate`, `wrong_seq`, `oversize`, `garbage`, and the leakage encoders `timing_bits`, `order_bits` and `fail_position` (`--bits`, `--slot`, `--batch`). See the docstring in `prover/server.py`.
+`prover/server.py --mode` makes the AI server misbehave: `honest`, `drop`, `delay`, `tamper_output`, `replay`, `duplicate`, `wrong_seq`, `oversize`, `garbage`, `flood` (repeats each answer `--batch` times), and the leakage encoders `timing_bits`, `order_bits`, `fail_position` and `load_bits` (`--bits`, `--slot`, `--batch`; `load_bits` also `--period`, `--deadline`, `--lead`, `--shift`). See the docstring in `prover/server.py`.
