@@ -28,7 +28,7 @@ Written before collecting the data (2 Nov 2026). Any analysis not listed here is
 **Question.** For the failure-position code (one chosen failure per 16 answers), how many planted bits get out and how many answers stay available, with no cap, two cap settings, and a halt at the first failure (Yogi's "block" option)? Do the replies match the reference model exactly?
 
 **Setup.**
-- The stock-system card with the Rust endpoint, through `device/pi_scenario.sh` (`ENDPOINT=rust`, the binary from the commit in the manifest), fixed release, `DEADLINE=4 SPIN_MS=5`, one client, N = 128.
+- The stock-system card with the Rust endpoint, through `device/pi_scenario.sh` (`ENDPOINT=rust`, `BIN` = the CI musl build of `f8b56ec`, sha256 `6f7f8702...671c`, the same binary as in the 2 Nov images; its hash goes into the manifest), fixed release, `DEADLINE=4 SPIN_MS=5`, one client, N = 128.
 - Bits: 32, `random.Random(20261106)`.
 - Runs, in this order: `fp_nocap`; `fp_cap_64_1_64` (`CAP="64 1 64"`); `fp_cap_64_2_32` (`CAP="64 2 32"`); `fp_halt1` (`HALT=1`); `honest_cap_64_1_64` (honest server, same cap, no failures expected).
 - A run counts only if its manifest says `"status": "ok"`.
@@ -48,7 +48,7 @@ python3 observer/jitter_test.py runs/p2/timing_ps.trace.jsonl $B2 --control runs
 python3 observer/estimate.py runs/p2/timing_ps.trace.jsonl $B2 --bins 4 --control runs/p2/honest_ps.trace.jsonl
 
 B3=$(python3 -c "import random; r=random.Random(20261106); print(''.join(r.choice('01') for _ in range(32)))")
-export OUT=runs/p3 ENDPOINT=rust DEADLINE=4 SPIN_MS=5
+export OUT=runs/p3 ENDPOINT=rust DEADLINE=4 SPIN_MS=5 BIN=<path to the f8b56ec CI binary>
 device/pi_scenario.sh fp_nocap fixed 128 1 -- --mode fail_position --batch 16 --bits $B3
 CAP="64 1 64" device/pi_scenario.sh fp_cap_64_1_64 fixed 128 1 -- --mode fail_position --batch 16 --bits $B3
 CAP="64 2 32" device/pi_scenario.sh fp_cap_64_2_32 fixed 128 1 -- --mode fail_position --batch 16 --bits $B3
