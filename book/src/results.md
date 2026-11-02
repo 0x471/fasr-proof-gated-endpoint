@@ -1,9 +1,9 @@
 # Measurements
 
 > **In short**
-> - Checking one proof on the Pi takes about 0.1 s with the proof tool alone and 0.24 s with all the endpoint's safety limits.
+> - Checking one proof on the Pi takes about 0.1 s with the proof tool alone, 0.19 s in the Rust endpoint and 0.24 s in the Python reference endpoint, with all the safety limits.
 > - At a 256 MiB memory cap every recorded check passed (231 of 231); smaller caps fail unpredictably.
-> - The leakage experiment, one client at a time: releasing in arrival order stopped the ordering code we tried; a fixed release time stopped the 1 s timing code but left a small timing trace, at the cost of 4 s per answer; deliberate failures leaked under every policy. A plain explanation is in [What a hacked server can still leak](leakage.md).
+> - The leakage experiment, one client at a time: releasing in arrival order stopped the ordering code we tried; a fixed release time stopped the 1 s timing code, at the cost of 4 s per answer, and a pre-registered 512-answer test of what remained was inconclusive on the stock system and found nothing on the stripped image (one run); deliberate failures leaked under every policy, and a failure cap cut them at a large cost in availability. A plain explanation is in [What a hacked server can still leak](leakage.md).
 
 Everything here was measured on one Raspberry Pi 4 (2 GB, Raspberry Pi OS Lite, 64-bit) with the AI server (Python EZKL prover) and the observer on a laptop (Apple M4 Pro) over a direct Ethernet link, unless stated otherwise. Dates are 2026.
 
@@ -14,8 +14,8 @@ Everything here was measured on one Raspberry Pi 4 (2 GB, Raspberry Pi OS Lite, 
 |---|---|---|---|
 | Change what an answer says | Blocked by the proof | Blocked | Each check takes about 0.24 s on the Pi |
 | Reorder answers | Leaks | **The ordering code we tried no longer gets through**: answers leave in the order questions arrived | A slow answer delays the ones behind it |
-| Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive | Answers take 4.0 s instead of about 0.8 s |
-| Fail chosen answers on purpose | Leaks | **Still leaks** | Open problem |
+| Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive on the stock system and found nothing on the stripped image (one run) | Answers take 4.0 s instead of about 0.8 s |
+| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 4 of 16 planted bits got out instead of 16/16 (one run) | 18 of 64 answers ok instead of 60 of 64 |
 <!-- ANCHOR_END: findings -->
 
 **How to read the leakage numbers.** The server hides known bits and an observer tries to read them back with a fixed decoder. "16/16" means every planted bit was recovered. When the decoder fails, the table says how many bits it got wrong; that means this decoder did not recover that message in that run, not that the encoding carries no information or that nothing leaks. These are achieved rates for one encoder each, from one sequential client unless stated; they are not capacity bounds.
