@@ -5,7 +5,8 @@ language = "en"
 src = "src"
 
 [output.html]
-site-url = "/fasr-proof-gated-egress/"
+git-repository-url = "https://github.com/0x471/fasr-proof-gated-endpoint"
+site-url = "/fasr-proof-gated-endpoint/"
 no-section-label = false
 
 [output.html.search]

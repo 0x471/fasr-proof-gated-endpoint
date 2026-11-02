@@ -39,4 +39,4 @@ These are results for one tiny, deterministic test model and the encoders we tri
 - **Checking the numbers:** [Measurements](results.md) and [Reproduce the results](reproduce.md).
 - **New to the terms:** the [Glossary](glossary.md).
 
-The code is in a private repository for now.
+The code is at [github.com/0x471/fasr-proof-gated-endpoint](https://github.com/0x471/fasr-proof-gated-endpoint).
