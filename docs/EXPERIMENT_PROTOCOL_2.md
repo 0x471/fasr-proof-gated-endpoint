@@ -1,4 +1,4 @@
-# Experiment protocols 2-4: the timing residue's cause, the failure-cap trade-off, and load
+# Experiment protocols 2-5: the timing residue's cause, the failure-cap trade-off, load, and several clients
 
 Written before collecting the data (2 Nov 2026). Any analysis not listed here is exploratory and is reported as such. Protocol 1 is `EXPERIMENT_PROTOCOL.md`.
 
@@ -54,6 +54,23 @@ Written before collecting the data (2 Nov 2026). Any analysis not listed here is
 
 **Secondary**: mean difference with its permutation p (`--perms 20000`); mutual information with 4 bins (`observer/estimate.py`).
 
+## Protocol 5: does the timing code get through fixed release with several clients? (written 2 Nov)
+
+**Question.** Every fixed-release result so far used one client at a time. With several clients, releases fall a few milliseconds apart and the endpoint spins for at most one of them per loop pass, and the server's delays decide when each check runs relative to the other clients' releases. Does the server's per-answer delay still show in when answers leave?
+
+**Setup.**
+- The hardened image (`aa2896...53bd`, fixed release, 4 s, 5 ms spin), default CPU speed policy, `device/image_scenario.sh` with `CLIENTS=3` (default `GAP_MS=2`): 86 rounds, one request per client per round, 258 answers.
+- Server `--mode timing_bits --slot 0.25`: a 1 delays that answer by a quarter second. The bits follow the order requests are admitted (client 0, 1, 2 of round 0, then round 1, ...), which is also the order the server answers them.
+- Bits: 258 from `random.Random(20261110)`, each `rng.choice('01')`.
+- Control: an honest run with the same clients and rounds, analysed with the same labels.
+- A run counts only if its manifest says `"status": "ok"` **and every answer is ok**: an `unavailable` answer means a proof missed the deadline, which is the failure channel, not timing; such a run is repeated in full.
+
+**Primary analysis**: reorder each trace with `observer/by_admission.py --clients 3`, then the held-out threshold decoder (`observer/jitter_test.py --heldout 2000`) with the control; decision rule as in protocol 1.
+
+**How the outcome will be read** (fixed now): not detected means three clients don't open a timing channel that one client didn't at n = 258; shown means the one-client result doesn't carry over, and the spin or the release loop needs work for several clients.
+
+**Secondary**: mean difference with its permutation p (`--perms 20000`); mutual information with 4 bins (`observer/estimate.py`).
+
 ## Commands
 ```sh
 B2=$(python3 -c "import random; r=random.Random(20261102); print(''.join(r.choice('01') for _ in range(256)))")
@@ -81,5 +98,15 @@ LABEL=load device/image_scenario.sh load_bits 256 -- --mode load_bits --bits $B4
 LABEL=load device/image_scenario.sh load_zero 256 -- --mode load_bits --bits $Z4 --period 1.0 --deadline 4.0 --lead 0.05 --shift 0.5
 python3 observer/jitter_test.py runs/p4/load_bits.trace.jsonl $B4 --control runs/p4/load_zero.trace.jsonl --perms 20000 --heldout 2000
 python3 observer/estimate.py runs/p4/load_bits.trace.jsonl $B4 --bins 4 --control runs/p4/load_zero.trace.jsonl
+
+B5=$(python3 -c "import random; r=random.Random(20261110); print(''.join(r.choice('01') for _ in range(258)))")
+unset PERIOD_MS; export OUT=runs/p5 IMAGE_SHA=<sha256 of the flashed image> CLIENTS=3
+LABEL=clients3 device/image_scenario.sh timing_c3 86 -- --mode timing_bits --bits $B5 --slot 0.25
+LABEL=clients3 device/image_scenario.sh honest_c3 86 -- --mode honest
+for r in timing_c3 honest_c3; do python3 -c "import json,sys; sys.exit(any(not json.loads(l)['answer']['ok'] for l in open('runs/p5/$r.trace.jsonl')))" || echo "$r has unavailable answers: repeat it"; done
+python3 observer/by_admission.py runs/p5/timing_c3.trace.jsonl --clients 3 > runs/p5/timing_c3.ordered.jsonl
+python3 observer/by_admission.py runs/p5/honest_c3.trace.jsonl --clients 3 > runs/p5/honest_c3.ordered.jsonl
+python3 observer/jitter_test.py runs/p5/timing_c3.ordered.jsonl $B5 --control runs/p5/honest_c3.ordered.jsonl --perms 20000 --heldout 2000
+python3 observer/estimate.py runs/p5/timing_c3.ordered.jsonl $B5 --bins 4 --control runs/p5/honest_c3.ordered.jsonl
 ```
-Protocol 2 takes about 17 minutes per run (six runs); protocol 3 about 9 minutes per run (five runs); protocol 4 about 5 minutes per run (two runs).
+Protocol 2 takes about 17 minutes per run (six runs); protocol 3 about 9 minutes per run (five runs); protocol 4 about 5 minutes per run (two runs); protocol 5 about 6 minutes per run (two runs).
