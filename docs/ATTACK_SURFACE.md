@@ -43,6 +43,20 @@ Other services: `syslogd`, `klogd`, `crond` (removed from `abb7d3b`), `seedrng` 
 
 **Scan artefacts.** Homebrew `nmap` on the laptop is blocked by macOS's Local Network permission (every port "host-unreach"); scans used Apple's Python instead. Parallel scans also time out on contiguous port ranges; those ports re-probed one at a time were closed. The 691 "filtered" ports on v0 (29 Oct) are most likely the same artefact.
 
+**Rebuilt 2 Nov (`201ab5e`, not booted yet):** no login prompt and root locked; IPv6, Wi-Fi, Bluetooth, sound and USB not in the kernel; no modules on the image and module loading switched off at boot (the endpoint refuses to start otherwise); lockdown, Yama and Landlock on; `/dev/mem`, debugfs, KGDB, ftrace, kprobes, BPF and user namespaces off; the checker child under a system-call filter. The serial, Wi-Fi, Bluetooth and IPv6 rows above change once this image is checked on the Pi.
+
+## Build machines (the supply chain)
+
+Not a way into the running device, but whoever controls a build machine controls what the device runs. Nothing is virtualised on the device; the virtual machine below exists only on the laptop.
+
+| Machine | What it produces | Checks today |
+|---|---|---|
+| GitHub Actions runner (`rust-endpoint.yml`) | the static aarch64 endpoint binary | upstream sources pinned by commit (`endpoint/sources.toml`), `--locked`; the binary baked into the image is the CI artifact, and `image/build.sh` prints its sha256 for comparison |
+| Laptop VM (Lima, Ubuntu) running `image/build.sh` | the SD-card image: kernel, Buildroot user space, our overlay | Buildroot tarball sha256 pinned from its signed release; Buildroot's Pi config sets `BR2_DOWNLOAD_FORCE_CHECK_HASHES`, so every downloaded source (the Pi kernel included) must match a hash shipped in that tarball; after the build, checks that every config line survived and that no login, module or getty is left |
+| Laptop (signing keys) | signed updates (`image/make_update.sh`) | the spec keeps the root key offline (`docs/UPDATE_SPEC.md`); the demo keys used so far are plain files on the laptop |
+
+**Gaps.** The image build is not reproducible and runs on one machine: a compromised VM or compiler can change the image after every check passes, and nothing on the device would notice (no secure boot). The VM image and host compilers are not pinned. Fix planned: build the image a second time on a clean CI runner and require the same sha256 (or record exactly which files differ and why).
+
 ## The end state (design)
 
 Three pieces, from the 21 Oct mentor call: the network piece (only it touches the wire; possibly a simpler protocol than TCP/IP), the tracker (one answer per question, release time, failure cap) and the verifier (proof check in a locked-down process). Today all three are inside one Linux process plus the checker child, on a full kernel.
