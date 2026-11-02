@@ -86,9 +86,10 @@ Status as of 20 Oct in the last column. "Open" means the channel is not closed b
 | Bytes appended to a valid proof | Proof format | EZKL accepts them (`test_trailing_proof_bytes_still_verify`), so the endpoint pins the exact proof length (`Policy.proof_bytes`); tested |
 | Inject, replay or reorder frames on either link | Links (A4) | No transport security in v0; replay is limited to one answer per `seq` |
 | A substituted verifier binary that accepts everything | Supply chain | Digest pin on download; v1 bakes the binary into the image |
+| A compromised build machine changes the image after every check | Supply chain (build) | Pinned, hash-checked sources and post-build checks (`docs/ATTACK_SURFACE.md`, build machines); not reproducible yet, second build on CI planned |
 | Make the device unreliable until operators bypass it | Availability | Failures are logged and counted; nothing yet makes a bypass visible |
 | Malformed or oversized frames | Parser | Fixed-size binary frames (v1 software); re-encoding an accepted frame gives the same bytes (fuzzed, including split streams, in `tests/test_protocol.py`) |
-| Exploit the verifier or the network stack | Device software | The verifier runs with Rayon set to one thread and per-process limits (memory on Linux, CPU, no file growth, few files; v1 software); the minimal image and a separate verifier user come with the v1 image |
+| Exploit the verifier or the network stack | Device software | The verifier runs with Rayon set to one thread and per-process limits (memory on Linux, CPU, no file growth, few files; v1 software); since 2 Nov the checker child also runs under a system-call filter (no files, sockets or new programs); the minimal image and a separate verifier user come with the v1 image |
 | Swap the bundle on disk | Bundle | Pins checked at load and before every check; same-user swap between check and use still possible |
 | Change the device's software | Boot chain | Not addressed in v0; secure boot in v2 |
 | Persuade an operator to approve a bad update or model (Gigurtsis 5.2.2, 5.6.8) | Update process | Not addressed in v0; separate keys and 2-of-3 update signing in v2 |
