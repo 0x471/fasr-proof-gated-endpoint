@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Deploy the book to Cloudflare Pages, behind Cloudflare Access (only listed emails can read it).
+# Deploy the book to Cloudflare Pages, either behind Cloudflare Access (only listed emails can
+# read it) or as a public site.
 # Usage from the repo root:
 #   CF_ACCESS_TEAM=<team> book/deploy-cloudflare.sh placeholder   # first: an empty page
 #   (lock every hostname and the previews with Cloudflare Access, then audit them by hand: book/DEPLOY.md)
 #   CF_ACCESS_TEAM=<team> book/deploy-cloudflare.sh book          # refuses unless all of them redirect to Access
+#   CF_PAGES_PROJECT=<project> book/deploy-cloudflare.sh public     # a public project: anyone can read it
 # Needs: Node (npx), `npx wrangler@4.147.0 login` done once, and mdBook 0.5.4 as `mdbook` or $MDBOOK.
 # The checks here are a smoke test, not an audit of the Access policies; see book/DEPLOY.md.
 set -euo pipefail
@@ -11,11 +13,14 @@ cd "$(dirname "$0")/.."
 
 WRANGLER="${WRANGLER:-npx --yes wrangler@4.147.0}"
 PROJECT="${CF_PAGES_PROJECT:-proof-gated-egress}"
-TEAM="${CF_ACCESS_TEAM:?set CF_ACCESS_TEAM to your Zero Trust team name (<team>.cloudflareaccess.com)}"
+TEAM="${CF_ACCESS_TEAM:-}"
 MDBOOK="${MDBOOK:-mdbook}"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
-[[ "$PROJECT" =~ ^[a-z0-9-]+$ && "$TEAM" =~ ^[a-z0-9-]+$ ]] || { echo "bad project or team name" >&2; exit 2; }
+[[ "$PROJECT" =~ ^[a-z0-9-]+$ ]] || { echo "bad project name" >&2; exit 2; }
+if [[ "${1:-}" == placeholder || "${1:-}" == book ]]; then
+  [[ "$TEAM" =~ ^[a-z0-9-]+$ ]] || { echo "set CF_ACCESS_TEAM to your Zero Trust team name (<team>.cloudflareaccess.com)" >&2; exit 2; }
+fi
 
 # The project's domains as Cloudflare reports them, one per line; the project name must match exactly.
 domains() {
@@ -71,8 +76,21 @@ case "${1:-}" in
     [[ -n "$DEPLOYMENT" ]] || { echo "WARNING: couldn't find this deployment's own address to check; check it by hand." >&2; exit 1; }
     echo "Deployed behind Access: https://$HOST (this upload: https://$DEPLOYMENT)"
     ;;
+  public)
+    ALL="$(domains)" || { echo "no project named exactly $PROJECT" >&2; exit 1; }
+    HOST="${CF_PAGES_HOST:-$PROJECT.pages.dev}"
+    grep -qxF "$HOST" <<< "$ALL" || { echo "$HOST is not a domain of project $PROJECT" >&2; exit 1; }
+    MDBOOK_OUTPUT__HTML__SITE_URL=/ "$MDBOOK" build book -d "$OUT/site"
+    $WRANGLER pages deploy "$OUT/site" --project-name "$PROJECT" --branch main
+    for _ in 1 2 3 4 5 6; do
+      [[ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://$HOST/" || true)" == 200 ]] && { echo "Deployed publicly: https://$HOST"; exit 0; }
+      sleep 10
+    done
+    echo "https://$HOST doesn't answer 200 after the upload; check it in the dashboard." >&2
+    exit 1
+    ;;
   *)
-    echo "usage: CF_ACCESS_TEAM=<team> $0 placeholder|book" >&2
+    echo "usage: CF_ACCESS_TEAM=<team> $0 placeholder|book, or CF_PAGES_PROJECT=<project> $0 public" >&2
     exit 2
     ;;
 esac
