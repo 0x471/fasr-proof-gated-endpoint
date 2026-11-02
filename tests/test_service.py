@@ -1278,6 +1278,7 @@ def test_load_bits_sends_one_answer_per_period_at_the_bit_phase(tiny_bundle, ver
         rows = await trace_paced("127.0.0.1", port, [[TINY_X]] * 5, period * 1000)
         assert [r["id"] for r in rows] == [0, 1, 2, 3, 4] and all(r["answer"]["ok"] for r in rows)
         srv = st.server
+        assert len(srv.prover.calls) == 1  # one proof for the repeated question: proving stalls the loop
         for k in range(1, 5):
             want = (k - 1) * period + deadline - lead - (0 if bits[k - 1] == "1" else shift)
             got = srv.sent_at[srv.requests[k]["seq"]] - srv.first

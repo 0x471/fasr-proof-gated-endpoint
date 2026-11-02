@@ -23,7 +23,8 @@ misbehave, for the service tests and as the start of the W4 malicious-prover har
                    apart, the answer to request k+1 is sent --lead seconds before request k's
                    fixed release (--deadline after it) for a 1, or --shift seconds earlier still
                    for a 0, so its check overlaps that release or falls between releases; one
-                   check per period either way. The answer to request 0 is sent at once
+                   check per period either way. The answer to request 0 is sent at once. Each distinct
+                   question is proved once and its proof reused (proving would stall the send timing)
 
 Usage: python prover/server.py --listen 127.0.0.1:8701 [--mode honest]
 """
@@ -121,6 +122,7 @@ class Server:
             raise ValueError("load_bits needs 0 < lead, 0 < shift and lead + shift < min(period, deadline)")
         self.period, self.deadline, self.lead, self.shift = period, deadline, lead, shift
         self.first: float | None = None
+        self.proved: dict[str, tuple] = {}
         self.sent_at: dict[int, float] = {}
         self.held: list[tuple[int, list, bytes]] = []
         self.used = 0
@@ -143,7 +145,15 @@ class Server:
                 k = len(self.requests)
                 self.requests.append({"seq": seq, "x": x})
                 try:
-                    outputs, proof = await loop.run_in_executor(self.pool, self.prover.prove, x)
+                    # load_bits times its sends to the millisecond, but proving holds the GIL and stalls this
+                    # loop for the whole proof; the same question can reuse its proof (K4), so prove it once.
+                    key = json.dumps(x) if self.mode == "load_bits" else None
+                    if key is not None and key in self.proved:
+                        outputs, proof = self.proved[key]
+                    else:
+                        outputs, proof = await loop.run_in_executor(self.pool, self.prover.prove, x)
+                        if key is not None:
+                            self.proved[key] = (outputs, proof)
                 except Exception as e:
                     print(f"seq {seq}: cannot prove: {type(e).__name__}", file=sys.stderr)
                     continue
