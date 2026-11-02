@@ -3,7 +3,7 @@
 > **In short**
 > - A proof fixes what an answer says, but a hacked server still controls **when** it answers, **in what order**, and **which answers fail**. Each of these can carry hidden data.
 > - On the real device, with one client at a time: releasing answers in arrival order stopped the ordering code we tried, and releasing every answer at a fixed time stopped the timing code we tried, at the cost of speed. A small leftover timing trace is described below.
-> - Deliberate failures leaked under every release rule we tried. This is the main open problem.
+> - Deliberate failures leaked under every release rule we tried. A cap on failures limits that channel, at a large cost in availability; it remains the main open problem.
 
 ## Why a proof isn't enough
 
@@ -33,7 +33,9 @@ No release rule can stop deliberate failures, because a failure looks like a rea
 - Over a window of N answers, if the observer only sees which answers failed and the endpoint allows at most F failures, the server can choose among at most C(N,0) + C(N,1) + ... + C(N,F) patterns, so it can send at most log2 of that many bits per window.
 - Stopping the endpoint at the first failure in a window of N answers leaves N + 1 outcomes (no failure, or a failure at one of N positions), so at most log2(N + 1) bits per window, but only if someone decides when the endpoint restarts; and it lets the server switch the endpoint off whenever it wants.
 
-These bounds hold only for that observation (failures only) and that policy; timing, logs and restarts need their own accounting. Measuring the trade-off, leakage against how often an honest endpoint would be stopped by real faults, is the next step.
+These bounds hold only for that observation (failures only) and that policy; timing, logs and restarts need their own accounting. The Rust endpoint now has such a cap, and one run on the Pi showed the trade-off: far fewer hidden bits got out, but many honest answers were refused too (numbers in [Measurements](results.md)). How the failure code scales with longer messages:
+
+{{#include results.md:failure-scaling}}
 
 ## What this doesn't show
 
