@@ -41,7 +41,8 @@ def test_catalogue_summary_matches_its_rows():
 
 
 def test_catalogue_counts_are_only_written_in_the_catalogue():
-    for path in PLAIN + REFERENCE + [RESULTS]:
+    pages = sorted({str(p.relative_to(ROOT)) for p in (ROOT / "book/src").glob("*.md")} | set(PLAIN + REFERENCE))
+    for path in pages:
         if path != "docs/ATTACKS.md":
             assert not re.search(r"\b\d+ scenarios\b", text(path)), f"{path}: include docs/ATTACKS.md:summary instead"
 
