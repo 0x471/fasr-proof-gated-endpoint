@@ -18,9 +18,8 @@ jobs:
           echo "3f28de05dafca9d0f2eab99c662116b0e37b89b1d96a08f8f430b9eeae958cd7  mdbook.tgz" | sha256sum -c
           tar -xzf mdbook.tgz
       - run: ./mdbook build book
-  # The private copy on Cloudflare Pages, behind Cloudflare Access (book/DEPLOY.md). The script
-  # refuses to upload unless every address of the project already redirects to the Access login.
-  # Runs only from main, and only once the repo variable CLOUDFLARE_DEPLOY is "true".
+  # The public copy on Cloudflare Pages (book/DEPLOY.md). The old private project stays behind
+  # Cloudflare Access. Runs only from main, and only once the repo variable CLOUDFLARE_DEPLOY is "true".
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.CLOUDFLARE_DEPLOY == 'true'
     needs: build
@@ -39,9 +38,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - run: book/deploy-cloudflare.sh book
+      - run: book/deploy-cloudflare.sh public
         env:
-          CF_ACCESS_TEAM: "0x471"
+          CF_PAGES_PROJECT: proof-gated-endpoint
           MDBOOK: ${{ runner.temp }}/mdbook
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
