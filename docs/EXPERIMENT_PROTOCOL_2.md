@@ -71,8 +71,17 @@ Written before collecting the data (2 Nov 2026). Any analysis not listed here is
 
 **Secondary**: mean difference with its permutation p (`--perms 20000`); mutual information with 4 bins (`observer/estimate.py`).
 
+## Packet captures (protocols 2, 4 and 5; added 2 Nov, before any run)
+
+Each run in protocols 2, 4 and 5 is also captured on the laptop's interface to the Pi (`tcpdump -w`, port 8700 only, started before the run and stopped after it). Two secondary analyses, reported next to the primary one and never replacing it:
+- **Packet level**: `observer/pcap_trace.py` summarises what the endpoint's packets looked like. Expected: every reply complete in one packet of one fixed size, and the same TCP flags and TTL in the signal run as in its control. Any difference between signal and control is reported as a finding, whatever the primary result.
+- **Capture times**: the same held-out decoder and decision rule on the capture's times (`--trace`), which leave out the observer program's scheduling. A residue that shows only here is reported as such.
+
 ## Commands
 ```sh
+# In a second terminal before each run (sudo), stopped with Ctrl-C after it:
+#   mkdir -p runs/pN; IF=$(route get 192.168.2.2 | awk '/interface/{print $2}'); sudo tcpdump -i $IF -w runs/pN/NAME.pcap tcp port 8700
+# then: python3 observer/pcap_trace.py runs/pN/NAME.pcap --trace runs/pN/NAME.pcap.jsonl
 B2=$(python3 -c "import random; r=random.Random(20261102); print(''.join(r.choice('01') for _ in range(256)))")
 # per condition, after booting with cmdline.txt set to that policy:
 export OUT=runs/p2 IMAGE_SHA=<sha256 of the flashed image>
