@@ -43,7 +43,7 @@ Other services: `syslogd`, `klogd`, `crond` (removed from `abb7d3b`), `seedrng` 
 
 **Scan artefacts.** Homebrew `nmap` on the laptop is blocked by macOS's Local Network permission (every port "host-unreach"); scans used Apple's Python instead. Parallel scans also time out on contiguous port ranges; those ports re-probed one at a time were closed. The 691 "filtered" ports on v0 (29 Oct) are most likely the same artefact.
 
-**Rebuilt 2 Nov (`201ab5e`, not booted yet):** no login prompt and root locked; IPv6, Wi-Fi, Bluetooth, sound and USB not in the kernel; no modules on the image and module loading switched off at boot (the endpoint refuses to start otherwise); lockdown, Yama and Landlock on; `/dev/mem`, debugfs, KGDB, ftrace, kprobes, BPF and user namespaces off; the checker child under a system-call filter. The serial, Wi-Fi, Bluetooth and IPv6 rows above change once this image is checked on the Pi.
+**Rebuilt 2 Nov (`201ab5e`; booted on the Pi 2 Nov: endpoint up, so the firewall and module-loading checks passed; TCP 8700 the only reachable port):** no login prompt and root locked; IPv6, Wi-Fi, Bluetooth, sound and USB not in the kernel; no modules on the image and module loading switched off at boot (the endpoint refuses to start otherwise); lockdown, Yama and Landlock on; `/dev/mem`, debugfs, KGDB, ftrace, kprobes, BPF and user namespaces off; the checker child under a system-call filter. With it, the serial console has no login, and Wi-Fi, Bluetooth and IPv6 are not in the kernel; these come from the build configuration and its checks, not from observing the device (no screen was attached and the image has no login).
 
 ## Build machines (the supply chain)
 
