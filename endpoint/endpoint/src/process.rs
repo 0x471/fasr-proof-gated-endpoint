@@ -229,14 +229,108 @@ pub fn limits(cpu: u64) -> io::Result<()> {
     Ok(())
 }
 
+/// After `limits`, the checker only computes on what it reads from stdin, so it is confined to
+/// the system calls it was traced making (memory, threads, futexes, stdin and stdout). Anything
+/// else (opening files, sockets, exec, ptrace, new processes, executable memory) fails with
+/// EPERM; a system call from another architecture kills the process.
+#[cfg(target_os = "linux")]
+pub fn sandbox() -> io::Result<()> {
+    #[cfg(target_arch = "aarch64")]
+    const ARCH: u32 = 0xc000_00b7;
+    #[cfg(target_arch = "x86_64")]
+    const ARCH: u32 = 0xc000_003e;
+    const KILL: u32 = 0x8000_0000;
+    const ALLOW: u32 = libc::SECCOMP_RET_ALLOW;
+    const DENY: u32 = libc::SECCOMP_RET_ERRNO | libc::EPERM as u32;
+    const NOSYS: u32 = libc::SECCOMP_RET_ERRNO | libc::ENOSYS as u32;
+    const NR: u32 = 0;
+    const ARGS: u32 = 16;
+    let op = |code: u32, k: u32| libc::sock_filter {
+        code: code as u16,
+        jt: 0,
+        jf: 0,
+        k,
+    };
+    let jump = |code: u32, k: u32, jt: u8, jf: u8| libc::sock_filter {
+        code: code as u16,
+        jt,
+        jf,
+        k,
+    };
+    let load = |offset: u32| op(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, offset);
+    let ret = |k: u32| op(libc::BPF_RET | libc::BPF_K, k);
+    let eq = |k: u32, jt: u8, jf: u8| jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, k, jt, jf);
+    let set =
+        |k: u32, jt: u8, jf: u8| jump(libc::BPF_JMP | libc::BPF_JSET | libc::BPF_K, k, jt, jf);
+    let mut prog = vec![load(4), eq(ARCH, 1, 0), ret(KILL), load(NR)];
+    // glibc falls back to clone when clone3 is missing; clone3's flags can't be inspected here.
+    prog.extend([eq(libc::SYS_clone3 as u32, 0, 1), ret(NOSYS)]);
+    prog.extend([
+        eq(libc::SYS_clone as u32, 0, 4),
+        load(ARGS),
+        set(libc::CLONE_THREAD as u32, 0, 1),
+        ret(ALLOW),
+        ret(DENY),
+    ]);
+    for nr in [libc::SYS_mmap, libc::SYS_mprotect] {
+        prog.extend([
+            eq(nr as u32, 0, 4),
+            load(ARGS + 16),
+            set(libc::PROT_EXEC as u32, 1, 0),
+            ret(ALLOW),
+            ret(DENY),
+        ]);
+    }
+    for nr in [
+        libc::SYS_read,
+        libc::SYS_write,
+        libc::SYS_munmap,
+        libc::SYS_mremap,
+        libc::SYS_brk,
+        libc::SYS_madvise,
+        libc::SYS_futex,
+        libc::SYS_sched_yield,
+        libc::SYS_sched_getaffinity,
+        libc::SYS_rt_sigprocmask,
+        libc::SYS_rt_sigreturn,
+        libc::SYS_sigaltstack,
+        libc::SYS_getrandom,
+        libc::SYS_gettid,
+        libc::SYS_set_robust_list,
+        libc::SYS_rseq,
+        libc::SYS_exit,
+        libc::SYS_exit_group,
+    ] {
+        prog.extend([eq(nr as u32, 0, 1), ret(ALLOW)]);
+    }
+    prog.push(ret(DENY));
+    let fprog = libc::sock_fprog {
+        len: u16::try_from(prog.len()).map_err(|_| io::Error::other("filter size"))?,
+        filter: prog.as_mut_ptr(),
+    };
+    // prog outlives both calls; the kernel copies the filter when it is installed.
+    unsafe {
+        if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0
+            || libc::prctl(
+                libc::PR_SET_SECCOMP,
+                libc::SECCOMP_MODE_FILTER,
+                &fprog as *const libc::sock_fprog,
+            ) != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn sandbox() -> io::Result<()> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn shell(script: &str, ms: u64) -> Verdict {
-        let mut cmd = Command::new("/bin/sh");
-        cmd.args(["-c", script]);
-        run(cmd, Duration::from_millis(ms), b"")
-    }
     #[test]
     fn successful_exit_and_one_marker_are_both_required() {
         assert_eq!(shell("printf 'accept\\n'", 1000), Verdict::Accept);

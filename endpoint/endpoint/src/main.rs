@@ -41,7 +41,7 @@ fn child(args: &[String]) -> ExitCode {
     let (Ok(cpu), Ok(proof_bytes)) = (args[1].parse::<u64>(), args[2].parse::<usize>()) else {
         return ExitCode::from(2);
     };
-    if process::limits(cpu).is_err() {
+    if process::limits(cpu).is_err() || process::sandbox().is_err() {
         return ExitCode::from(2);
     }
     let pins = Pins([args[3].clone(), args[4].clone(), args[5].clone()]);
