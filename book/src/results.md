@@ -4,6 +4,7 @@
 > - Checking one proof on the Pi takes about 0.1 s with the proof tool alone, 0.19 s in the Rust endpoint and 0.24 s in the Python reference endpoint, with all the safety limits.
 > - At a 256 MiB memory cap every recorded check passed (231 of 231); smaller caps fail unpredictably.
 > - The leakage experiment, one client at a time: releasing in arrival order stopped the ordering code we tried; a fixed release time stopped the 1 s timing code, at the cost of 4 s per answer, and a pre-registered 512-answer test of what remained was inconclusive on the stock system and found nothing on the stripped image (one run); deliberate failures leaked under every policy, and a failure cap cut them at a large cost in availability. A plain explanation is in [What a hacked server can still leak](leakage.md).
+> - In a model, random sleeps instead of a fixed release time keep leaking: the leak per answer shrinks only in proportion to the added wait, and enough answers reveal it.
 
 Everything here was measured on one Raspberry Pi 4 (2 GB, Raspberry Pi OS Lite, 64-bit) with the AI server (Python EZKL prover) and the observer on a laptop (Apple M4 Pro) over a direct Ethernet link, unless stated otherwise. Dates are 2026.
 
@@ -184,6 +185,22 @@ A second measure on the same data (`observer/estimate.py`): the mutual informati
 The bias correction can make the estimate negative; that is estimator noise, not negative information. The bootstrap intervals assume exchangeable answers within one run; they are not intervals over sessions, days or encoders.
 
 With 2 or 8 bins the no-spin result holds (p = 0.0005) and the old spin result doesn't reach significance (p = 0.46 and 0.09). Caveats on the 128-answer runs: the observer recorded times rounded to 0.1 ms (only 19-30 distinct values per 128 answers), and the spin runs used an earlier version of the spin code that a review later found could let a later answer overtake an earlier one when several were in flight. The 512-answer repeat fixes both; at 4 bins and n = 512 it is not significant either (p = 0.069).
+
+### Random sleeps instead of a fixed release time (a model, 2 Nov)
+
+A model, not a device measurement (`observer/sleep_vs_fixed.py`, tests in `tests/test_sleep_vs_fixed.py`): the server sends each answer on time or a fixed amount late, and the endpoint either adds a sleep drawn uniformly from 0 to R before release or releases at a fixed time after the question arrived. With uniform sleeps alone, one answer of a two-level code that shifts by d carries exactly d/R bit (d up to R): only the first and last d of the window give the bit away, and extra noise only lowers this. A server allowed to delay by up to A can carry up to log2(1 + A/R) bit per answer (exact when A/R is a whole number), so the sleep has to grow with the server's freedom. With a fixed release time the release moment doesn't depend on the server at all; an answer that misses it is not released and becomes a failure, which is the failure channel above.
+
+Simulated with honest-time noise of sd 20 ms, a 200 ms shift code and 4,096 answers, the binned estimate (`observer/estimate.py`, 4 bins, so it understates the exact value) was significant for every sleep tried, up to sleeps of 0-4 s that add 2 s on average; fixed release gave none:
+
+| Release rule | Added wait on average | Upper bound, d/R | Binned estimate | p (500 shuffles) |
+|---|---|---|---|---|
+| Random sleep 0-0.5 s | 0.25 s | 0.4 bit | 0.26 bit | 0.002 |
+| Random sleep 0-1 s | 0.5 s | 0.2 bit | 0.062 bit | 0.002 |
+| Random sleep 0-2 s | 1 s | 0.1 bit | 0.016 bit | 0.002 |
+| Random sleep 0-4 s | 2 s | 0.05 bit | 0.005 bit | 0.002 |
+| Fixed release, 4 s | 3.2 s | 0 | 0.000 bit | 1.0 |
+
+With a smaller 50 ms shift and 512 answers the same estimate no longer reached significance from sleeps of 0-0.5 s up (p = 0.076 to 0.53), although the d/R bound there is still 0.1 down to 0.0125 bit per answer: a test that finds nothing at one sample size is not evidence that the sleep closed the channel.
 
 ### Several connections (smoke runs, 20 Oct)
 

@@ -22,7 +22,7 @@ We did this on the real Raspberry Pi for three ways of signalling and three rele
 What this means:
 
 - **Order is easy to protect.** Sending answers back in the order the questions arrived removes the server's choice: the observer decoded the same bits whatever the server planted.
-- **Timing costs speed to protect.** The endpoint aims to send every answer 4 seconds after its question, so a delay chosen by the server no longer shows in a simple way. But every user now waits the whole budget, even when the answer was ready much sooner (the last row above).
+- **Timing costs speed to protect.** The endpoint aims to send every answer 4 seconds after its question, so a delay chosen by the server no longer shows in a simple way. But every user now waits the whole budget, even when the answer was ready much sooner (the last row above). Random delays are not a cheaper fix: the server's own delay still shifts when answers leave, an observer with enough answers can read it, and the leak per answer only shrinks as the added wait grows (a model in [Measurements](results.md#random-sleeps-instead-of-a-fixed-release-time-a-model-2-nov)).
 - **A small timing trace was left.** {{#include results.md:no-spin-trace}} {{#include results.md:spin-verdict}}
 - **Failures stay open.** The server can always make an answer fail by sending a bad proof, and which answers fail is itself the message: choosing one failure in every 16 answers sends 4 bits per 16 answers. {{#include results.md:failure-leak}}
 
