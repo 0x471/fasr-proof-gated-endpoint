@@ -141,6 +141,18 @@ The core experiment (19 Oct): the same workload under each of the endpoint's thr
 Only 4 of 64 answers failed (one chosen position in each block of 16), yet all 16 bits got through: 0.25 bit per request with this encoder.
 <!-- ANCHOR_END: failure-leak -->
 
+**How the failure code scales.** The position code fails one answer in each batch of B answers and hides log2(B) bits in which one fails, so n answers carry (n/B) log2(B) bits for n/B failures. Sending 512 bits takes 128 failures in 2,048 answers with B = 16, or 52 failures in 53,248 answers with B = 1,024: fewer failures cost many more answers. That is one encoder; the limits for any encoder that only uses which answers fail are:
+
+<!-- ANCHOR: failure-scaling -->
+| What the server may do | Bits it can carry |
+|---|---|
+| Fail any answers it likes, no cap | up to 1 bit per answer (512 answers carry 512 bits) |
+| Fail exactly k of n answers | log2 C(n, k), e.g. 168.9 bits for 32 failures among 512 answers |
+| Any pattern the failure cap allows (W = 64, F = 1, C = 64, `observer/cap_bound.py`) | at most 11.02 bits in 64 replies, 63.05 in 512, 472.71 in 4,096 (about 0.12 bit per reply) |
+<!-- ANCHOR_END: failure-scaling -->
+
+These count only which answers fail; timing, busy replies and logs are separate (see the `cap_bound.py` docstring).
+
 ### What fixed release leaves
 
 A longer run (128 random bits, plus 128 honest requests as a control) asked whether the 2 ms of remaining jitter still follows the server:
