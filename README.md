@@ -1,4 +1,4 @@
-# Proof-gated egress
+# Proof-gated endpoint
 
 A small device that lets an AI server's answers out only if each one carries a valid cryptographic proof that the approved model produced it. This repository has the device's software, its threat model, every attack tried against it, and the measurements.
 

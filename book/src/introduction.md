@@ -1,4 +1,4 @@
-# Proof-gated egress
+# Proof-gated endpoint
 
 > **In short**
 > - A small computer (a Raspberry Pi) sits between an AI server and the outside world. It lets an answer out only if a cryptographic proof shows the approved model produced it from that exact question.

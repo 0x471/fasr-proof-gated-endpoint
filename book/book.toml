@@ -1,5 +1,5 @@
 [book]
-title = "Proof-gated egress"
+title = "Proof-gated endpoint"
 description = "A device that releases AI outputs only with a valid zero-knowledge proof: threat model, attack catalogue and measurements."
 language = "en"
 src = "src"
