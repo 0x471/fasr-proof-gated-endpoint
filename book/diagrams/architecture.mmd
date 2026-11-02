@@ -6,12 +6,12 @@ flowchart LR
     end
     subgraph PI["Raspberry Pi 4: the endpoint"]
         direction LR
-        SVC["Endpoint service<br/>pge/service.py<br/>one asyncio process"]
-        BUN[("Pinned bundle<br/>settings.json, vk.key, kzg.srs")]
-        CHK["EZKL CLI<br/>one limited child<br/>process per check"]
+        SVC["Endpoint<br/>one static Rust binary<br/>one poll() loop"]
+        BUN[("Signed store<br/>model files + release policy")]
+        CHK["Checker<br/>the same binary, one limited<br/>and sandboxed child per check"]
         LOG[("Log<br/>fixed words only")]
         SVC --> BUN
-        SVC -->|"proof + instances"| CHK
+        SVC -->|"bundle + proof"| CHK
         CHK -->|"verdict"| SVC
         SVC --> LOG
     end
