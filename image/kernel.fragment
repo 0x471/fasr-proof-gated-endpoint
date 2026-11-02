@@ -13,6 +13,11 @@ CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
 CONFIG_SECURITY_YAMA=y
 CONFIG_SECURITY_LANDLOCK=y
 CONFIG_LSM="lockdown,yama,landlock"
+# Lockdown turns on module signing. No signing key at all: the build then embeds no certificate (a
+# generated one would differ in every build, so two builds couldn't be compared) and no module can
+# ever be verified, so lockdown refuses every module even if loading were switched back on.
+CONFIG_MODULE_SIG_KEY=""
+# CONFIG_MODULE_SIG_ALL is not set
 # CONFIG_DEVMEM is not set
 # CONFIG_DEBUG_FS is not set
 # CONFIG_KPROBES is not set
