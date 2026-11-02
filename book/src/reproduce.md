@@ -58,6 +58,10 @@ python3 observer/estimate.py runs/fixed_long/timing_fixed_long.trace.jsonl $B --
 python3 observer/estimate.py --selftest      # the estimator on synthetic channels with known values
 ```
 
+## On the v1 image
+
+The image has no login, so nothing is started on the Pi: build and flash it, and `device/image_scenario.sh NAME N -- SERVER_ARGS` runs one scenario against the endpoint that starts at boot (`IMAGE_SHA` names the flashed image; `PERIOD_MS` paces the questions; `CLIENTS` uses several connections). The image itself: `image/build.sh` on a Linux machine, a signed update from `image/make_update.sh`; `image/manifest.sh` lists every file of a built image, and the `image` workflow builds it a second time on a clean runner to compare. The pre-registered protocols for the image runs, with their commands, are in `docs/EXPERIMENT_PROTOCOL_2.md`.
+
 ## Server modes
 
 `prover/server.py --mode` makes the AI server misbehave: `honest`, `drop`, `delay`, `tamper_output`, `replay`, `duplicate`, `wrong_seq`, `oversize`, `garbage`, and the leakage encoders `timing_bits`, `order_bits` and `fail_position` (`--bits`, `--slot`, `--batch`). See the docstring in `prover/server.py`.
