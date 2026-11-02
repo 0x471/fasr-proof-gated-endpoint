@@ -34,6 +34,6 @@
 
 **`unavailable`.** The endpoint's single error reply for anything involving the server. It never says why, so the server can't use the error text to signal.
 
-**v0, v1, v2.** The endpoint's versions: v0 on the standard Pi system; v1 with stricter software (including arrival-order and fixed-time release) on a stripped-down system; v2 adds secure boot, signed updates, fixed time slots and a hash-chained log.
+**v0, v1, v2.** The endpoint's versions: v0, the Python endpoint on the standard Pi system; v1, the Rust endpoint (stricter release rules, a failure cap, a sandboxed checker, signed updates) on a stripped-down, read-only system; v2 adds secure boot, two physical ports, a counter against restoring an old update store, and signed images.
 
 **Verification key (vk).** The approved model's public key for checking its proofs.

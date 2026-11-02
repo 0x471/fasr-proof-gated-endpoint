@@ -3,9 +3,9 @@
 > **In short**
 > - A small computer (a Raspberry Pi) sits between an AI server and the outside world. It lets an answer out only if a cryptographic proof shows the approved model produced it from that exact question.
 > - That stops a hacked server from changing **what** an answer says. It doesn't stop it from signalling through **when** answers leave, **in what order**, or **which ones fail**.
-> - We measured those three signals on the real device, one client at a time. Release rules stopped the ordering and timing codes we tried (timing at a cost in speed, with a small trace whose status is in the table below); deliberate failures still get through.
+> - We measured those three signals on the real device, one client at a time. Release rules stopped the ordering and timing codes we tried (timing at a cost in speed, with a small trace whose status is in the table below); deliberate failures still get through, fewer of them with a cap that costs availability.
 
-This work was supported by ERA's Frontier AI Security Residency. It is work in progress (October 2026), not production security.
+This work was supported by ERA's Frontier AI Security Residency. It is work in progress (November 2026), not production security.
 
 ## Why this matters
 

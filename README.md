@@ -39,8 +39,8 @@ Measured on a real Raspberry Pi 4 with one client at a time and one tiny test mo
 | Version | What it is | Status |
 |---|---|---|
 | v0 | The checking software on the Pi's standard operating system | Done and measured |
-| v1 | Stricter software (fixed message format, release in arrival order or at a fixed time, contained checker, fixed-word logs) on a stripped-down system with nothing else running | Software done and measured on the standard system; the stripped system boots, the software isn't on it yet |
-| v2 | Secure boot, signed versioned updates, fixed time slots, a hash-chained log | Planned |
+| v1 | Stricter software in Rust (fixed message format, release in arrival order or at a fixed time, a failure cap, a sandboxed checker, fixed-word logs, signed updates) on a stripped-down, read-only system with one open port | Done and measured on the Pi; a rebuild with a locked-down kernel and no login is awaiting its Pi check |
+| v2 | Secure boot, two physical ports, a counter against restoring an old update store, signed images | Planned |
 <!-- ANCHOR_END: status -->
 
 ## Read more
