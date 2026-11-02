@@ -40,7 +40,9 @@ release is intentionally unsupported.
   the root, manifest signed by a listed key, this device, no rollback or
   replay, every file's hash. `pge-sign` (same crate) signs offline.
 - `endpoint` owns sockets, timers and logs. Each proof runs in a fresh child
-  with resource limits; bounded pipe records carry the bundle and proof.
+  with resource limits and, on Linux, a seccomp allow-list (no files, sockets,
+  exec, new processes or executable memory); bounded pipe records carry the
+  bundle and proof.
 
 The verifier writes no runtime files. `--log` is an explicit optional write
 by the parent; omit it to send records to stderr. The child re-hashes the
