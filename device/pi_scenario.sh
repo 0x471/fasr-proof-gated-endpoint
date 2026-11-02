@@ -9,7 +9,7 @@
 # CLIENTS (default 1): with more than 1, that many connections each send one request per round (N rounds).
 # ENDPOINT (default python): rust runs the static binary BIN (default: the aarch64 musl build in endpoint/target) as
 # ~/p01-rust/pge-endpoint on the Pi instead of the Python endpoint and the EZKL CLI. Immediate release is
-# Python only. CAP="W F C" turns on the Rust endpoint's failure cap.
+# Python only. CAP="W F C" turns on the Rust endpoint's failure cap; HALT=N makes it stop after N failures.
 # The observer runs with /usr/bin/python3: on macOS a Homebrew Python may lack Local Network access.
 # The checkout must be clean: the manifest names its commit, taken before the run, and the hashes
 # of what the Pi ran (endpoint code, bundle, pins, domain, EZKL CLI, Python). A run is "ok" only if the
@@ -23,6 +23,7 @@ CLIENTS="${CLIENTS:-1}"
 ENDPOINT="${ENDPOINT:-python}"
 BIN="${BIN:-endpoint/target/aarch64-unknown-linux-musl/release/pge-endpoint}"
 CAP="${CAP:-}"
+HALT="${HALT:-}"
 NAME=$1 RELEASE=$2 N=$3 BATCH=$4; shift 5
 # These go into a command run by the Pi's shell, so only plain values are allowed.
 [[ "$NAME" =~ ^[A-Za-z0-9_]+$ ]] || { echo "bad NAME"; exit 2; }
@@ -33,6 +34,7 @@ num='^(0|[1-9][0-9]*)(\.[0-9]+)?$'
 [[ "$ENDPOINT" =~ ^(python|rust)$ ]] || { echo "bad ENDPOINT"; exit 2; }
 [[ -z "$CAP" || ( "$ENDPOINT" == rust && "$CAP" =~ ^[1-9][0-9]{0,3}\ [0-9]{1,4}\ [1-9][0-9]{0,3}$ ) ]] || { echo "bad CAP"; exit 2; }
 [[ "$ENDPOINT" == python || "$RELEASE" != immediate ]] || { echo "the Rust endpoint has no immediate release"; exit 2; }
+[[ -z "$HALT" || ( "$ENDPOINT" == rust && "$HALT" =~ ^[1-9][0-9]{0,3}$ ) ]] || { echo "bad HALT"; exit 2; }
 [[ -z "$(git status --porcelain)" ]] || { echo "$NAME: the checkout has changes; commit them first"; exit 2; }
 COMMIT="$(git rev-parse HEAD)"
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -74,7 +76,7 @@ if [[ $ENDPOINT == python ]]; then
   LAUNCH="python3 -I -c 'import sys; sys.path.insert(0, \".\"); from pge.service import main; main()' $ARGS --cli /home/bob/p01-v0/ezkl"
 else
   read -r CW CF CC <<< "${CAP:-}"
-  LAUNCH="/home/bob/p01-rust/pge-endpoint $ARGS${CAP:+ --cap-window $CW --cap-failures $CF --cap-cooldown $CC}"
+  LAUNCH="/home/bob/p01-rust/pge-endpoint $ARGS${CAP:+ --cap-window $CW --cap-failures $CF --cap-cooldown $CC}${HALT:+ --halt-after $HALT}"
 fi
 ssh -n p01 "cd ~/p01-v1 || exit 1; rm -f ~/endpoint_$NAME.log ~/endpoint_$NAME.err; nohup $LAUNCH </dev/null >/home/bob/endpoint_$NAME.err 2>&1 &"
 ok=0
@@ -96,14 +98,14 @@ ssh -n p01 "cat ~/endpoint_$NAME.log" > "$OUT/$NAME.endpoint.jsonl" && [[ -s "$O
 ssh -n p01 "cat ~/endpoint_$NAME.err" > "$OUT/$NAME.endpoint.err" || logs=1
 status=ok
 [[ $rc == 0 && $rows == "$WANT" && $logs == 0 ]] || status=failed
-ENDPOINT="$ENDPOINT" CAP="$CAP" NAME="$NAME" RELEASE="$RELEASE" N="$N" BATCH="$BATCH" CLIENTS="$CLIENTS" DEADLINE="$DEADLINE" SPIN_MS="$SPIN_MS" \
+ENDPOINT="$ENDPOINT" CAP="$CAP" HALT="$HALT" NAME="$NAME" RELEASE="$RELEASE" N="$N" BATCH="$BATCH" CLIENTS="$CLIENTS" DEADLINE="$DEADLINE" SPIN_MS="$SPIN_MS" \
 COMMIT="$COMMIT" HERE="$here" STARTED="$STARTED" RC="$rc" ROWS="$rows" LOGS="$logs" STATUS="$status" PI_FILES="$pi_files" \
   /usr/bin/python3 -I -c '
 import json, os, sys
 e = os.environ
 lines = e["PI_FILES"].splitlines()
 files = dict(reversed(l.split("  ", 1)) for l in lines if "  " in l)
-m = {"name": e["NAME"], "endpoint": e["ENDPOINT"], "cap": e["CAP"], "release": e["RELEASE"], "n": int(e["N"]), "batch": int(e["BATCH"]),
+m = {"name": e["NAME"], "endpoint": e["ENDPOINT"], "cap": e["CAP"], "halt": e["HALT"], "release": e["RELEASE"], "n": int(e["N"]), "batch": int(e["BATCH"]),
      "clients": int(e["CLIENTS"]), "deadline": float(e["DEADLINE"]), "spin_ms": float(e["SPIN_MS"]),
      "commit": e["COMMIT"], "pge_sha256": e["HERE"], "pi_sha256": files,
      "pi_python": [l for l in lines if l.startswith("Python ")], "started": e["STARTED"],
