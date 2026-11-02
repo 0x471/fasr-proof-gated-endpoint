@@ -65,4 +65,6 @@ grep -q '^[^#].*/sbin/getty' "$WORK/out/target/etc/inittab" && { echo "a login p
 grep -q '^root:\*:' "$WORK/out/target/etc/shadow" || { echo "root login is not locked" >&2; exit 1; }
 [ ! -e "$WORK/out/target/lib/modules" ] || { echo "kernel modules are still on the image" >&2; exit 1; }
 grep -qx 'kernel.modules_disabled = 1' "$WORK/out/target/etc/sysctl.d/90-pge.conf" || { echo "module loading is not switched off" >&2; exit 1; }
+# The log lives on /tmp (RAM); a size cap keeps a flood of records from using up memory (K51).
+grep -q '^tmpfs[[:space:]]*/tmp[[:space:]]*tmpfs[[:space:]]*[^[:space:]]*size=64m' "$WORK/out/target/etc/fstab" || { echo "/tmp has no size cap" >&2; exit 1; }
 sha256sum "$WORK/out/images/sdcard.img"
