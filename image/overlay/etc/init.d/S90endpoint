@@ -10,6 +10,7 @@ case "$1" in
 	start)
 		printf "Starting endpoint: "
 		/usr/sbin/nft list table ip pge >/dev/null 2>&1 || { echo "FAIL (no firewall)"; exit 1; }
+		[ "$(cat /proc/sys/kernel/modules_disabled)" = 1 ] || { echo "FAIL (module loading is on)"; exit 1; }
 		start-stop-daemon -S -b -m -p "$PIDFILE" -c pge -x "$DAEMON" -- $ARGS && echo OK || echo FAIL
 		;;
 	stop)
