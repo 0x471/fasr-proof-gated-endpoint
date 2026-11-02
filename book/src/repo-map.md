@@ -4,7 +4,7 @@
 
 | Path | What it does |
 |---|---|
-| `endpoint/wire` | The message format: parse, then re-encode and compare, so every message has one accepted form; no unsafe code |
+| `endpoint/wire` | The message format: parse, then re-encode and compare, so every message has one accepted form; no unsafe code; two bounded Kani proofs (the frame length check, and any 12-byte input for the smallest model shape; larger inputs did not finish) |
 | `endpoint/core` | The release rules, halt and failure cap as a deterministic state machine; the caller supplies time and events |
 | `endpoint/verify` | Binding (encodes the question like EZKL) and the pinned bundle, re-hashed for every check |
 | `endpoint/update` | Signed updates: the key list, the manifest, the forward-only state; `pge-sign` makes signatures off the device |
