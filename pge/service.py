@@ -284,6 +284,9 @@ class Endpoint:
 
     def on_answer(self, seq: int, outputs: list, proof: bytes) -> None:
         p = self.pending.get(seq)
+        if (p is None or p.checking) and self.counts["stale_answer"] + self.counts["duplicate_answer"] >= self.seq:
+            # An honest server sends at most one late answer per request; more would flood the log.
+            raise ProtocolError("more unexpected answers than requests")
         if p is None:
             # The seq is server-chosen, so it is counted but not logged.
             self.counts["stale_answer"] += 1

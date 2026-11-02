@@ -49,6 +49,7 @@ struct Endpoint {
     clock: Instant,
     log: Box<dyn Write>,
     log_errors: u64,
+    unexpected: u64,
     clients: BTreeMap<u64, Client>,
     requests: BTreeMap<u64, Request>,
     jobs: VecDeque<Job>,
@@ -188,8 +189,19 @@ impl Endpoint {
     }
     fn answer(&mut self, seq: u64, outputs: Vec<[u8; 32]>, proof: Vec<u8>) {
         match self.core.answer(seq) {
-            Answer::Stale => self.log(json!({"result":"stale_answer"})),
-            Answer::Duplicate => self.log(json!({"result":"duplicate_answer","seq":seq})),
+            // An honest server sends at most one late answer per request; more would flood the log.
+            Answer::Stale | Answer::Duplicate if self.unexpected >= self.core.issued() => {
+                self.log(json!({"result":"server_violation"}));
+                self.disconnect("violation");
+            }
+            Answer::Stale => {
+                self.unexpected += 1;
+                self.log(json!({"result":"stale_answer"}));
+            }
+            Answer::Duplicate => {
+                self.unexpected += 1;
+                self.log(json!({"result":"duplicate_answer","seq":seq}));
+            }
             Answer::Check => {
                 let Some(p) = self.requests.get_mut(&seq) else {
                     return;
@@ -410,6 +422,7 @@ pub fn run(mut config: Config) -> Result<(), String> {
         clock: Instant::now(),
         log,
         log_errors: 0,
+        unexpected: 0,
         clients: BTreeMap::new(),
         requests: BTreeMap::new(),
         jobs: VecDeque::new(),

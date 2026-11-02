@@ -170,6 +170,9 @@ impl Core {
     pub fn failures(&self) -> u64 {
         self.failures
     }
+    pub fn issued(&self) -> u64 {
+        self.seq
+    }
     pub fn take_halt_notice(&mut self) -> Option<u64> {
         self.halt_notice.take()
     }
