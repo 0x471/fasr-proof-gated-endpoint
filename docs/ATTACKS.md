@@ -3,13 +3,13 @@
 Every scenario catalogued against the device, by us, by reviewers or by testers: what it targets, how far it got, and its evidence (a test, a Pi run, or none yet). Living document; final in W7.
 
 <!-- ANCHOR: summary -->
-The catalogue has 50 scenarios: 37 stopped, 2 allowed on purpose, 9 that still work, are only partly stopped or are untested, and 2 out of scope. Some were shown on the Pi, some only in tests, and some are only proposed; the counts describe coverage, not a security score.
+The catalogue has 51 scenarios: 38 stopped, 2 allowed on purpose, 9 that still work, are only partly stopped or are untested, and 2 out of scope. Some were shown on the Pi, some only in tests, and some are only proposed; the counts describe coverage, not a security score.
 <!-- ANCHOR_END: summary -->
 
 <!-- ANCHOR: outcomes -->
 | Outcome | Scenarios | Examples |
 |---|---|---|
-| Stopped | 37 | Edited answers, a proof for a different question, a proof from another model, padded proofs, garbage or oversized messages, a taken-over checker reaching files or the network, answering twice or late, malicious proofs that try to exhaust the checker, using a disconnect to stall the endpoint, rolled-back, replayed or substituted updates, a changed or old release policy, updates for another device or from an unlisted key, overlapping or live installs, a key revocation that didn't stick, a hand-edited state |
+| Stopped | 38 | Edited answers, a proof for a different question, a proof from another model, padded proofs, garbage or oversized messages, a taken-over checker reaching files or the network, answering twice or late, malicious proofs that try to exhaust the checker, using a disconnect to stall the endpoint, rolled-back, replayed or substituted updates, a changed or old release policy, updates for another device or from an unlisted key, overlapping or live installs, a key revocation that didn't stick, a hand-edited state |
 | Allowed on purpose | 2 | The same question gets the same answer again (the server has no choice there); an endpoint set to stop after failures can be stopped by the server |
 | Still works, partly stopped or untested | 9 | Timing (much reduced), failing on purpose, never answering, keeping the endpoint busy, loading the endpoint to delay releases, restarting the endpoint to reset its failure count, other services on the standard system, probing the endpoint's rules, restoring a whole older copy of the update store |
 | Out of scope | 2 | Learning the model from many correct answers; physical attacks |
@@ -54,6 +54,7 @@ Pi results: 16 Oct 2026 (v0 software) and 19 Oct 2026 (v1 software), both on the
 
 | # | Attack | Version | Level | Result | Covered by |
 |---|---|---|---|---|---|
+| K51 | Flood the device with stale, duplicate or never-issued answers, each of which writes a log record, to fill the log (in RAM on the image, `/var/log` on tmpfs) so later records are lost, or to keep the event loop busy (found by review, 2 Nov) | v1 (software) | shown in tests | blocked: more such answers than requests issued is a server protocol violation; the link is dropped and the device redials no sooner than half a second later, so the server adds at most one such record per request plus a few per reconnect. Clients' own requests still add records at the rate clients send (an accomplice outside could fill the log that way); the tmpfs has no size cap yet and the log isn't sent off the device (v2) | `test_more_unexpected_answers_than_requests_is_a_violation`, `test_a_flooding_server_is_disconnected`, `test_modes_match_python[flood]` (Python and Rust; mutation-checked on both) |
 | K19 | Put server-chosen values into the device's log (seq numbers, error text, output counts, proof lengths) | v1 (software) | shown in tests | blocked: records hold fixed words, the device's seq, the client's request hash, `ms` and the halt failure count (v0 logged error text that could carry the output count and proof length); the number and timing of log events still follow the server; who reads the log is undefined | `test_unissued_seq_is_not_logged`, `test_server_violation_detail_is_fixed_text`, `test_log_records_hold_no_server_text`, `test_proof_length_reason_hides_the_length` |
 | K20 | Get server text into the client's error | v0 | shown in tests | blocked: two fixed error strings | `test_only_two_error_strings` |
 
