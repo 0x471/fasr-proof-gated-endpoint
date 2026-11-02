@@ -188,89 +188,24 @@ pub fn frame_len(header: [u8; 4], limit: usize) -> Result<usize, Invalid> {
     }
 }
 
-// Bounded proofs with Kani (`cargo kani` in endpoint/wire), for the smallest shape (one input, one
-// output): the layout code has no per-shape branches, but these proofs say nothing about larger shapes.
-// Plain assert!, not assert_eq!: the latter makes Kani model Debug formatting of floats.
+// Bounded proofs with Kani (`cargo kani -p pge-wire`), for the smallest shape (one input, one output).
+// Two hold. Harnesses for request-, reply- and answer-sized inputs, and for "every valid message parses
+// back", did not finish within 30 minutes each (2 Nov 2026), so nothing is claimed for them; the fuzz
+// target `wire` covers the same properties by sampling.
 #[cfg(kani)]
 mod proofs {
     use super::*;
 
-    fn wire() -> Wire {
-        Wire::new(1, 1).unwrap()
-    }
-
-    // Any bytes of these lengths, any kind: parse never panics, and what it accepts encodes back to
-    // the same bytes. 17 = a request, 18 = a reply, 42-44 = an answer with a 1-3 byte proof.
-    fn any_input<const N: usize>() {
-        let raw: [u8; N] = kani::any();
-        if let Ok(message) = wire().parse(kani::any(), &raw) {
-            assert!(wire().encode(&message).unwrap() == raw);
-        }
-    }
-
+    // Any 12 bytes, any kind: parse never panics, and what it accepts encodes back to the same bytes.
     #[kani::proof]
-    #[kani::unwind(10)]
+    #[kani::unwind(13)]
     #[kani::solver(cadical)]
     fn any_short_input() {
-        any_input::<12>();
-    }
-
-    #[kani::proof]
-    #[kani::unwind(10)]
-    #[kani::solver(cadical)]
-    fn any_request_sized_input() {
-        any_input::<17>();
-    }
-
-    #[kani::proof]
-    #[kani::unwind(10)]
-    #[kani::solver(cadical)]
-    fn any_reply_sized_input() {
-        any_input::<18>();
-    }
-
-    #[kani::proof]
-    #[kani::unwind(34)]
-    #[kani::solver(cadical)]
-    fn any_answer_sized_input() {
-        any_input::<44>();
-    }
-
-    // Everything the endpoint itself writes is accepted back: no valid message is refused.
-    #[kani::proof]
-    #[kani::unwind(10)]
-    #[kani::solver(cadical)]
-    fn every_valid_request_parses_back() {
-        let id: u64 = kani::any();
-        kani::assume(id < MAX_ID);
-        let x: f64 = kani::any();
-        kani::assume(x.is_finite());
-        let forward: bool = kani::any();
-        let message = if forward {
-            Message::Forward(id, vec![x])
-        } else {
-            Message::Request(id, vec![x])
-        };
-        let raw = wire().encode(&message).unwrap();
-        assert!(wire().parse(if forward { 2 } else { 1 }, &raw) == Ok(message));
-    }
-
-    #[kani::proof]
-    #[kani::unwind(10)]
-    #[kani::solver(cadical)]
-    fn every_valid_reply_parses_back() {
-        let id: u64 = kani::any();
-        kani::assume(id < MAX_ID);
-        let y: f64 = kani::any();
-        kani::assume(y.is_finite());
-        let reply = match kani::any::<u8>() % 3 {
-            0 => Reply::Ok(vec![y]),
-            1 => Reply::BadRequest,
-            _ => Reply::Unavailable,
-        };
-        let message = Message::Reply(id, reply);
-        let raw = wire().encode(&message).unwrap();
-        assert!(wire().parse(4, &raw) == Ok(message));
+        let wire = Wire::new(1, 1).unwrap();
+        let raw: [u8; 12] = kani::any();
+        if let Ok(message) = wire.parse(kani::any(), &raw) {
+            assert!(wire.encode(&message).unwrap() == raw);
+        }
     }
 
     #[kani::proof]
