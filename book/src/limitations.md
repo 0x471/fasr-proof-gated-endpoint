@@ -1,29 +1,30 @@
 # Limitations and open questions
 
 > **In short**
-> - Not built yet: the stripped v1 system running the endpoint, secure boot, signed updates, and a defence for the failure channel.
+> - Not built yet: two physically separate ports, secure boot, a counter that stops a whole older store being restored, update delivery on the device, a hash-chained log.
 > - Not measured yet: a real upper bound on leakage, several users at once, packet-level signals, the speed-versus-leakage trade-off.
 > - The results assume all of the server's traffic goes through the endpoint, one approved model, and a sound proof system.
 
 ## Not built yet
 
-- **The v1 image.** The v1 software runs on the stock OS. The stripped image (only the endpoint, two wired ports, read-only system, a separate unprivileged user for the verifier, a log partition) is in progress.
-- **v2:** signed, versioned updates with a rollback rule and power-loss-safe installation; secure boot (which permanently writes a key into the board, so it needs a spare board); a hash-chained log sent to a separate collector.
-- **A defence for the failure channel.** No release policy limits it. Capping failures per window bounds what the failure pattern alone can carry: if the observer sees only which of N answers failed and the endpoint allows at most F, the server can send at most log2(C(N,0) + ... + C(N,F)) bits per window; stopping at the first failure leaves N + 1 outcomes per window, if restarts are controlled. Timing, logs and restarts need their own accounting, and none of this is implemented or measured yet.
+- **Two physical ports.** The v1 image runs the endpoint, but the server side and the outside still share one cable; a board with a second wired port is planned.
+- **v2:** secure boot (which permanently writes a key into the board, so it needs a spare board); a TPM counter so a whole older copy of the update store can't be restored (K43); a power-loss test of update installation on the Pi's file system; a hash-chained log sent to a separate collector.
+- **Update delivery on the device.** The image has no login; a new update comes as a new image or is applied to the card's store on another machine, where the same rollback and replay rules apply because the state lives on the card.
+- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and one Pi run showed far fewer hidden bits getting out at a large cost in availability ([Measurements](results.md)). Timing, logs and restarts need their own accounting.
 
 ## Not measured yet
 
 - **A capacity bound.** The numbers are achieved rates for planted bits and one binned mutual-information statistic (`observer/estimate.py`, checked on synthetic channels with known values). Checking an estimator on known distributions is not a bound on what an arbitrary encoder and observer can achieve; no such bound is claimed.
-- **Several clients at once,** other loads, and a packet capture on the outside link (packet sizes and TCP behaviour are still the stock OS's).
+- **Several clients at once,** other loads, and a packet capture on the outside link.
 - **The `busy` channel:** a server that holds requests open makes other clients' requests fail; it depends on load and is not measured.
 - **The budget trade-off:** fixed release was run with one budget (4 s); leakage and lost answers against the budget are not measured.
-- **The residual timing trace** under fixed release: its mechanism, and whether the redesigned spin (waking early and waiting precisely) removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.
+- **The residual timing trace** under fixed release: its mechanism (two candidates: how long the processor takes to wake from idle, and its speed changing with load; the v1 image's kernel defaults to the lowest processor speed, which may be why its run showed nothing), and whether the redesigned spin removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.
 
 ## Assumptions the results rest on
 
-- Every path from the server to the outside goes through the device. On the v0 OS this is not enforced.
+- Every path from the server to the outside goes through the device. With one shared cable this is not enforced physically.
 - One pinned model and circuit; the binding rules are specific to EZKL 23.0.5.
-- The verifier binary, the bundle, the domain file and the interpreter are trusted inputs of the image. The verifier is trusted, with its failures contained: if it wrongly said ACCEPT, the endpoint couldn't tell. The domain file is not among the bundle's pinned hashes; the experiment script checks it against the checkout and records its hash. The endpoint checks the bundle's hashes at load and before every check; the CLI's download is checked by its digest when it is fetched; the interpreter and the CLI on disk are not re-checked at run time, so they rely on the read-only image.
+- The endpoint binary, with EZKL's verifier inside it, is trusted, with its failures contained: if the verifier wrongly said ACCEPT, the endpoint couldn't tell. On the v1 image the model files, the domain file and the release policy come from the signed store and are checked at start; the bundle's hashes are checked again before every check. The binary itself relies on the read-only image (and, in v2, secure boot). The Python reference endpoint additionally trusts the EZKL command-line tool and the interpreter.
 - The proof system is sound. Its soundness is out of scope.
 
 ## Out of scope

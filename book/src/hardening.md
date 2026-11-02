@@ -15,9 +15,9 @@
 
 **4. Say nothing the server chose.** Users only ever see the proven output or a fixed error (`unavailable`, or `bad_request` for a well-formed question the model can't answer); a malformed message just closes the connection. The endpoint's log uses a fixed vocabulary, never text from the server; it still records a counter, a hash of the question and the time taken, and which events happen and when still follow the server.
 
-**5. Run on a minimal system (v1, in progress).** The standard Pi system has ssh and other services listening. A stripped-down system built for the endpoint boots with no open network ports at all; the endpoint software goes onto it next.
+**5. Run on a minimal system (v1).** The standard Pi system has ssh and other services listening. The v1 image is built for the endpoint alone: one static Rust binary running as an unprivileged user, a read-only system, one open port behind a firewall built into the kernel (the endpoint won't start without its rules), no ssh and no scheduled jobs. The 2 Nov rebuild also locks the kernel down (no loadable modules, kernel lockdown, no raw memory, debugger or tracing interfaces, nothing for IPv6, radios, sound or USB) and removes every login prompt; its check on the Pi is pending.
 
-**6. Lock the device (v2, planned).** Secure boot, so the Pi starts only a system we signed; signed updates that can't roll back to an older version.
+**6. Accept only signed changes.** The model files and the release policy come from a signed update: the endpoint refuses rollbacks, replays, updates for another device and unknown or revoked keys (catalogue rows K36-K48). Still planned (v2): secure boot, so the board starts only a system we signed, and a counter in a TPM so a whole older copy of the store can't be restored (K43).
 
 ## Catalogued scenarios
 
@@ -39,4 +39,4 @@ Each now has a test that fails on the old code (catalogue rows K30, K31, K33 and
 
 ## What isn't hardened yet
 
-The stripped system doesn't run the endpoint yet, nothing yet forces all of the server's traffic through the endpoint, and there is no secure boot or signed update path. See [Limitations and open questions](limitations.md).
+Both sides still share one cable, so nothing physically forces the server's traffic through the endpoint; there is no secure boot; a whole older copy of the update store is accepted (K43); a new update needs a new image or an offline step; the verifier's own verdict is trusted; and the Linux kernel, though trimmed, is still large. See [Limitations and open questions](limitations.md).
