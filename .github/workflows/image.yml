@@ -43,12 +43,12 @@ jobs:
       - name: build the image
         run: |
           BIN="$RUNNER_TEMP/bin/pge-endpoint" UPDATE="$RUNNER_TEMP/update" ROOT_PUB="$RUNNER_TEMP/keys/root.pub" \
-            image/build.sh "$RUNNER_TEMP/img"
+            image/build.sh /var/tmp/pge-image
       - name: list the image's files
         run: |
           mkdir out
-          sudo image/manifest.sh "$RUNNER_TEMP/img/out/images/sdcard.img" > out/files.txt
-          cp "$RUNNER_TEMP/img/out/images/sdcard.img" "$RUNNER_TEMP/img/out/build/linux-custom/.config" out/
+          sudo image/manifest.sh /var/tmp/pge-image/out/images/sdcard.img > out/files.txt
+          cp /var/tmp/pge-image/out/images/sdcard.img /var/tmp/pge-image/out/build/linux-custom/.config out/
           mv out/.config out/kernel.config
           (cd out && sha256sum sdcard.img files.txt kernel.config | tee SHA256SUMS)
       - uses: actions/upload-artifact@v7
