@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build the device image with Buildroot on a Linux host (Buildroot does not build on macOS).
 # Usage: image/build.sh [WORKDIR]   (default ~/p01-image); the image ends up in WORKDIR/out/images/sdcard.img
+# To compare two builds byte for byte, build both from an empty /var/tmp/pge-image: Buildroot's reproducible
+# mode only holds for the same output directory, and a rebuild in place bumps the kernel's build number.
 # BIN is the static aarch64 endpoint (default: the CI artifact under endpoint/target). UPDATE is a
 # signed update (image/make_update.sh) and ROOT_PUB the root public key: the update is applied into the
 # store on a writable data partition, and the key goes into the read-only root.

@@ -12,3 +12,6 @@ BR2_PACKAGE_NFTABLES=y
 # BR2_TARGET_ENABLE_ROOT_LOGIN is not set
 # Kernel lockdown turns on module signing, whose build tools need OpenSSL on the host.
 BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
+# Build times, users and host names out of the image, so a second build can be compared byte for byte
+# (Buildroot also needs the same output directory: image/build.sh's WORK).
+BR2_REPRODUCIBLE=y
