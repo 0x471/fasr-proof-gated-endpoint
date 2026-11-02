@@ -63,4 +63,6 @@ grep -E '^CONFIG_|^# CONFIG_.* is not set$' "$HERE/kernel.fragment" | while read
 done
 grep -q '^[^#].*/sbin/getty' "$WORK/out/target/etc/inittab" && { echo "a login prompt is still in inittab" >&2; exit 1; }
 grep -q '^root:\*:' "$WORK/out/target/etc/shadow" || { echo "root login is not locked" >&2; exit 1; }
+[ ! -e "$WORK/out/target/lib/modules" ] || { echo "kernel modules are still on the image" >&2; exit 1; }
+grep -qx 'kernel.modules_disabled = 1' "$WORK/out/target/etc/sysctl.d/90-pge.conf" || { echo "module loading is not switched off" >&2; exit 1; }
 sha256sum "$WORK/out/images/sdcard.img"

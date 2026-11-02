@@ -10,3 +10,5 @@ BR2_PACKAGE_NFTABLES=y
 # or are applied to the card's store on another machine (docs/UPDATE_SPEC.md).
 # BR2_TARGET_GENERIC_GETTY is not set
 # BR2_TARGET_ENABLE_ROOT_LOGIN is not set
+# Kernel lockdown turns on module signing, whose build tools need OpenSSL on the host.
+BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
