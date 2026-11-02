@@ -8,7 +8,8 @@ With --batch K, K requests are sent at once and their answers read in arrival or
 rows show the order in which the endpoint released them. With --clients C, C connections each send one
 request per round (client 0 first, --gap-ms apart, so the endpoint admits them in client order); each
 row also has "client", "round" and "recv_ms" (receive time since the start), and rows are in the
-order answers arrived across all connections.
+order answers arrived across all connections. With --period-ms P, one connection sends request i at
+start + i * P whatever has come back (open loop); rows are in arrival order, elapsed_ms per request.
 Requests and answers use the endpoint's binary format (pge/protocol.py); the observer needs no
 bundle, so it sizes requests from x and answers from their frame length (y comes back flat).
 """
@@ -68,6 +69,37 @@ async def trace_batches(host: str, port: int, xs: list, batch: int, on_row=None)
                 if on_row:
                     on_row(rows[-1])
     finally:
+        writer.close()
+    return rows
+
+
+async def trace_paced(host: str, port: int, xs: list, period_ms: float, on_row=None) -> list[dict]:
+    """Send request i at start + i * period_ms on one connection without waiting for answers."""
+    reader, writer = await asyncio.open_connection(host, port)
+    sent: dict[int, float] = {}
+    rows = []
+
+    async def send() -> None:
+        start = time.monotonic()
+        for cid, x in enumerate(xs):
+            await asyncio.sleep(max(0.0, start + cid * period_ms / 1000 - time.monotonic()))
+            sent[cid] = time.monotonic()
+            writer.write(frame(Wire(tuple(len(t) for t in x), ()).encode_request(cid, x)))
+            await writer.drain()
+
+    sender = asyncio.create_task(send())
+    try:
+        for _ in xs:
+            answer = await _read_reply(reader)
+            if answer["id"] not in sent:
+                raise ValueError(f"answer for id {answer['id']}, which wasn't sent")
+            rows.append({"id": answer["id"], "elapsed_ms": round((time.monotonic() - sent[answer["id"]]) * 1000, 3),
+                         "answer": answer})
+            if on_row:
+                on_row(rows[-1])
+        await sender
+    finally:
+        sender.cancel()
         writer.close()
     return rows
 
@@ -194,10 +226,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--batch", type=int, default=1)
     ap.add_argument("--clients", type=int, default=1, help="connections, one request each per round (--n rounds)")
     ap.add_argument("--gap-ms", type=float, default=2.0)
+    ap.add_argument("--period-ms", type=float, default=0.0, help="open loop: one request every P ms on one connection")
     a = ap.parse_args(argv)
     xs = [json.loads(a.x)] * a.n
     emit = lambda row: print(json.dumps(row), flush=True)
-    if a.clients > 1:
+    if a.period_ms > 0:
+        asyncio.run(trace_paced(a.host, a.port, xs, a.period_ms, emit))
+    elif a.clients > 1:
         asyncio.run(trace_clients(a.host, a.port, json.loads(a.x), a.clients, a.n, a.gap_ms, emit))
     elif a.batch > 1:
         asyncio.run(trace_batches(a.host, a.port, xs, a.batch, emit))

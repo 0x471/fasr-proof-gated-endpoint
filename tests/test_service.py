@@ -1237,3 +1237,43 @@ def test_failure_decoder_refuses_batches_the_encoder_cannot_use(batch):
     from client import decode_failure_position
     with pytest.raises(ValueError):
         decode_failure_position([{"answer": {"ok": True}}] * 12, batch)
+
+
+def test_load_bits_sends_one_answer_per_period_at_the_bit_phase(tiny_bundle, verifier):
+    sys.path.insert(0, str(ROOT / "observer"))
+    from client import trace_paced
+
+    bits, period, deadline, lead, shift = "1011", 0.3, 1.0, 0.05, 0.15
+
+    async def t(st):
+        port = st.servers[1].sockets[0].getsockname()[1]
+        rows = await trace_paced("127.0.0.1", port, [[TINY_X]] * 5, period * 1000)
+        assert [r["id"] for r in rows] == [0, 1, 2, 3, 4] and all(r["answer"]["ok"] for r in rows)
+        srv = st.server
+        for k in range(1, 5):
+            want = (k - 1) * period + deadline - lead - (0 if bits[k - 1] == "1" else shift)
+            got = srv.sent_at[srv.requests[k]["seq"]] - srv.first
+            assert abs(got - want) < 0.03, (k, got, want)
+    run_stack(tiny_bundle, verifier, t,
+              server=server(tiny_bundle, "load_bits", bits=bits, period=period, deadline=deadline, lead=lead,
+                            shift=shift),
+              policy=Policy(deadline=deadline, release="fixed"))
+
+
+def test_load_bits_refuses_phases_that_overlap_the_next_period(tiny_bundle):
+    with pytest.raises(ValueError):
+        server(tiny_bundle, "load_bits", period=0.3, deadline=1.0, lead=0.1, shift=0.25)
+
+
+def test_trace_paced_keeps_sending_while_answers_are_held(tiny_bundle, verifier):
+    sys.path.insert(0, str(ROOT / "observer"))
+    from client import trace_paced
+
+    async def t(st):
+        port = st.servers[1].sockets[0].getsockname()[1]
+        start = time.monotonic()
+        rows = await trace_paced("127.0.0.1", port, [[TINY_X]] * 4, 100)
+        assert time.monotonic() - start < 2.0
+        assert [r["id"] for r in rows] == [0, 1, 2, 3]
+        assert all(950 < r["elapsed_ms"] < 1100 for r in rows)
+    run_stack(tiny_bundle, verifier, t, policy=Policy(deadline=1.0, release="fixed"))

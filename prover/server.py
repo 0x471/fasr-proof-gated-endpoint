@@ -18,6 +18,11 @@ misbehave, for the service tests and as the start of the W4 malicious-prover har
                    per batch, as the index of a permutation
   fail_position    hide --bits in which answer of each --batch fails (tampered output, so the
                    endpoint rejects it): log2(batch) bits per batch, one failure per batch
+  load_bits        hide --bits in when the endpoint's checker is busy: with requests --period seconds
+                   apart, the answer to request k+1 is sent --lead seconds before request k's
+                   fixed release (--deadline after it) for a 1, or --shift seconds earlier still
+                   for a 0, so its check overlaps that release or falls between releases; one
+                   check per period either way. The answer to request 0 is sent at once
 
 Usage: python prover/server.py --listen 127.0.0.1:8701 [--mode honest]
 """
@@ -44,7 +49,7 @@ TINY = ROOT / "tests" / "fixtures" / "tiny"
 TINY_SETTINGS_SHA256 = "b4a95fc7c572816034708c4e5c079f0f91f82eb9681cfa069565aacc9887aefd"
 TINY_VK_SHA256 = "34ab48a8ac0946be4faf10d85699ac729adb20ec4c6251da1d1d0d4ea18a4d26"
 MODES = ("honest", "drop", "delay", "tamper_output", "replay", "duplicate", "wrong_seq", "oversize", "garbage",
-         "timing_bits", "order_bits", "fail_position")
+         "timing_bits", "order_bits", "fail_position", "load_bits")
 
 
 def bits_per_batch(k: int) -> int:
@@ -99,7 +104,8 @@ class Prover:
 
 class Server:
     def __init__(self, prover, mode: str = "honest", delay: float = 0.0, bits: str = "", slot: float = 0.2,
-                 batch: int = 2):
+                 batch: int = 2, period: float = 1.0, deadline: float = 4.0, lead: float = 0.05,
+                 shift: float = 0.5):
         if mode not in MODES:
             raise ValueError(f"unknown mode {mode!r}")
         if set(bits) - {"0", "1"}:
@@ -110,6 +116,11 @@ class Server:
             raise ValueError("batch must be a power of 2 for fail_position")
         self.prover, self.mode, self.delay, self.bits, self.slot = prover, mode, delay, bits, slot
         self.batch = batch
+        if mode == "load_bits" and not (0 < lead and 0 < shift and lead + shift < min(period, deadline)):
+            raise ValueError("load_bits needs 0 < lead, 0 < shift and lead + shift < min(period, deadline)")
+        self.period, self.deadline, self.lead, self.shift = period, deadline, lead, shift
+        self.first: float | None = None
+        self.sent_at: dict[int, float] = {}
         self.held: list[tuple[int, list, bytes]] = []
         self.used = 0
         self.wire = Wire.for_spec(prover.spec)
@@ -126,6 +137,9 @@ class Server:
                 if data is None:
                     break
                 seq, x = self.wire.parse_forward(data)
+                if self.first is None:
+                    self.first = loop.time()
+                k = len(self.requests)
                 self.requests.append({"seq": seq, "x": x})
                 try:
                     outputs, proof = await loop.run_in_executor(self.pool, self.prover.prove, x)
@@ -139,12 +153,32 @@ class Server:
                             await self._send(writer, *self.held[i])
                         self.held = []
                     continue
+                if self.mode == "load_bits" and k > 0:
+                    asyncio.create_task(self._send_at(writer, self._load_target(k), seq, outputs, proof))
+                    continue
                 await self._send(writer, seq, outputs, proof)
                 self.previous = (outputs, proof)
         except (ProtocolError, ConnectionError):
             pass
         finally:
             writer.close()
+
+    def _load_target(self, k: int) -> float:
+        """Loop time to send answer k: just before request k-1's release for a 1, earlier for a 0."""
+        bit = self.bits[k - 1] if k - 1 < len(self.bits) else "0"
+        release = self.first + (k - 1) * self.period + self.deadline
+        return release - self.lead - (0 if bit == "1" else self.shift)
+
+    async def _send_at(self, writer, target: float, seq: int, outputs: list, proof: bytes) -> None:
+        loop = asyncio.get_running_loop()
+        await asyncio.sleep(max(0.0, target - loop.time()))
+        late = loop.time() - target
+        if late > 0.01:
+            print(f"seq {seq}: sent {late * 1000:.0f} ms late", file=sys.stderr)
+        try:
+            await self._send(writer, seq, outputs, proof)
+        except ConnectionError:
+            pass
 
     def _order(self) -> list[int]:
         m = bits_per_batch(self.batch)
@@ -180,6 +214,7 @@ class Server:
         else:
             payload = self.wire.encode_answer(seq, outputs, proof)
         writer.write(frame(payload))
+        self.sent_at[seq] = asyncio.get_running_loop().time()
         if m == "duplicate":
             writer.write(frame(payload))
         self.sent += 1
@@ -195,8 +230,12 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--bits", default="")
     ap.add_argument("--slot", type=float, default=0.2)
     ap.add_argument("--batch", type=int, default=2)
+    ap.add_argument("--period", type=float, default=1.0, help="load_bits: seconds between the observer's requests")
+    ap.add_argument("--deadline", type=float, default=4.0, help="load_bits: the endpoint's fixed release time")
+    ap.add_argument("--lead", type=float, default=0.05)
+    ap.add_argument("--shift", type=float, default=0.5)
     a = ap.parse_args(argv)
-    server = Server(Prover(a.srs), a.mode, a.delay, a.bits, a.slot, a.batch)
+    server = Server(Prover(a.srs), a.mode, a.delay, a.bits, a.slot, a.batch, a.period, a.deadline, a.lead, a.shift)
     host, _, port = a.listen.rpartition(":")
 
     async def run() -> None:
