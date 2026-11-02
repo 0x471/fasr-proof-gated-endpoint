@@ -54,7 +54,7 @@ These bounds hold only for that observation (failures only) and that policy, and
 ## What this doesn't show
 
 - These are the rates **one particular** hiding method achieved, not the most any method could achieve.
-- One device, one network, one client at a time (the ordering test used several questions at once on one connection). With several clients, the fixed-time rule and its spin interact in ways not yet measured.
+- One device, one network, one client at a time (the ordering test used several questions at once on one connection). With three clients at once, one pre-registered run of the timing code was inconclusive, and timing one proof check to overlap each release was not detected ([Measurements](results.md)).
 - Packet-level signals (packet sizes, network timing details) haven't been measured yet.
 
 All numbers and their conditions are in [Measurements](results.md).
