@@ -40,7 +40,7 @@ echo "$BR_SHA  $BR.tar.xz" | sha256sum -c -
 [ -d "$BR" ] || tar -xJf "$BR.tar.xz"
 export BR2_DL_DIR="$WORK/dl"
 # Buildroot never removes files an earlier overlay installed; clear ours so a rebuild holds only this one.
-rm -rf "$WORK/out/target/etc/pge" "$WORK/out/target/data"
+rm -rf "$WORK/out/target/etc/pge" "$WORK/out/target/data" "$WORK/out/target/lib/modules"
 make -C "$BR" O="$WORK/out" raspberrypi4_64_defconfig
 { cat "$HERE/v1.fragment"
   echo "BR2_ROOTFS_OVERLAY=\"$HERE/overlay $STAGE\""
@@ -58,7 +58,7 @@ done
 grep -qx '# BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW is not set' "$WORK/out/.config" || { echo "root filesystem would be writable" >&2; exit 1; }
 make -C "$BR" O="$WORK/out"
 # Buildroot doesn't rebuild an already built kernel when the fragment changes; check it took effect.
-grep -E '^CONFIG_' "$HERE/kernel.fragment" | while read -r line; do
+grep -E '^CONFIG_|^# CONFIG_.* is not set$' "$HERE/kernel.fragment" | while read -r line; do
   grep -qxF "$line" "$WORK/out/build/linux-custom/.config" || { echo "kernel lacks $line: make linux-reconfigure" >&2; exit 1; }
 done
 sha256sum "$WORK/out/images/sdcard.img"
