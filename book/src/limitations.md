@@ -15,7 +15,7 @@
 ## Not measured yet
 
 - **A capacity bound.** The numbers are achieved rates for planted bits and one binned mutual-information statistic (`observer/estimate.py`, checked on synthetic channels with known values). Checking an estimator on known distributions is not a bound on what an arbitrary encoder and observer can achieve; no such bound is claimed.
-- **Several clients at once,** a server that times its answers to load the endpoint, and a packet capture on the outside link: the protocols are written (`docs/EXPERIMENT_PROTOCOL_2.md`, protocols 4 and 5, captures in 2, 4 and 5) but not run yet.
+- **Load and several clients** were each run once ([Measurements](results.md): one overlapping check per release, not detected; three clients, inconclusive). Stacked checks, flooding, more answers for the three-client case, and packet captures on the outside link are not done yet.
 - **The `busy` channel:** under fixed release, which requests come back `busy` doesn't depend on the server (a state-machine test, K17); in arrival order it does, and under load the event loop's own delays (K34) are not measured.
 - **The budget trade-off:** fixed release was run with one budget (4 s). How much of it honest answers use, with one and three clients, is in [Measurements](results.md); leakage against other budgets is not measured.
 - **The residual timing trace** under fixed release: its mechanism (two candidates: how long the processor takes to wake from idle, and its speed changing with load; the v1 image's kernel defaults to the lowest processor speed, which may be why its run showed nothing), and whether the redesigned spin removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.

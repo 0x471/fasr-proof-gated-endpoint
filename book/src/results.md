@@ -234,9 +234,20 @@ Short checks of the new run script and the several-clients observer (`CLIENTS=3`
 
 So the order a server chooses does reach an outside observer across separate connections when answers leave as they are checked, and arrival-order release stopped this code in this run. It is 8 bits in one run per rule, on one machine running all three clients; the planned two-client deadline-pressure experiment is the real test.
 
+### Load and several clients on the hardened image (2 Nov, protocols 4 and 5)
+
+Both pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`, run on the 2 Nov hardened image (`aa289680...`, fixed release 4 s, 5 ms spin) with the laptop idle; every answer in every run was ok. Deviation from the protocols: no packet captures were taken (they need `sudo` on the laptop), so only the primary and secondary analyses below exist. Before any data, a dry run on the Pi showed the `load_bits` server sending late (proving in EZKL's Python binding stalls the server's event loop for the whole proof, about half a second); the server now proves each distinct question once, and both runs had no late sends.
+
+| Protocol | Runs | Held-out decoder (signal / control) | Secondary | Verdict (rule fixed in advance) |
+|---|---|---|---|---|
+| 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | **not detected**: one overlapping check per release doesn't move releases on this image at n = 256 |
+| 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | **inconclusive**: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
+
+What protocol 4 doesn't cover: several checks stacked across one release, flooding, and checker and event loop forced onto one core.
+
 ## What these results don't show
 
-- One device, one network, one sequential client (ordering used concurrent requests on one connection). Several clients, other loads and packet-level observation (sizes, TCP behaviour) are not measured yet.
+- One device, one network, one sequential client (ordering used concurrent requests on one connection). Several clients and one kind of load were measured once each (protocols 5 and 4 above); other loads and packet-level observation (sizes, TCP behaviour) are not measured yet.
 - Every leakage cell is one run of 16 bits, except the 128-bit residual tests and the 512-bit spin repeat.
 - The release budget (4 s) was chosen by hand; how much of it honest answers use is measured (see the 29 Oct section), but leakage under other budgets is not.
 - Nothing here is a bound on what a cleverer encoder could achieve.
