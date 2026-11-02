@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import ROOT, TINY, TINY_X
+from conftest import ROOT, TINY, TINY_X, _unavailable
 from pge.protocol import Wire, frame, read_frame
 from pge.service import Endpoint, Policy, load_domain
 from test_service import FakeProver, OTHER_X, py_verifier
@@ -27,7 +27,7 @@ def ezkl():
     except ImportError:
         if os.environ.get("PGE_RUST_REFERENCE_CLI"):
             return None
-        raise
+        _unavailable("ezkl not installed")
     assert mod.__version__ == "23.0.5"
     return mod
 
