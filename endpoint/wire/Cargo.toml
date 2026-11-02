@@ -3,3 +3,6 @@ name = "pge-wire"
 version.workspace = true
 edition.workspace = true
 
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
