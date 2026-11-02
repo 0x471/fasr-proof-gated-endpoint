@@ -26,7 +26,7 @@
 - One pinned model and circuit; the binding rules are specific to EZKL 23.0.5.
 - The endpoint binary, with EZKL's verifier inside it, is trusted, with its failures contained: if the verifier wrongly said ACCEPT, the endpoint couldn't tell. On the v1 image the model files, the domain file and the release policy come from the signed store and are checked at start; the bundle's hashes are checked again before every check. The binary itself relies on the read-only image (and, in v2, secure boot). The Python reference endpoint additionally trusts the EZKL command-line tool and the interpreter.
 - The proof system is sound. Its soundness is out of scope.
-- The machines that build the device's software weren't compromised. The endpoint binary is built on GitHub's CI from pinned sources; the image is built in a virtual machine on the laptop from hash-checked sources and checked afterwards. A second build on a clean runner matched it file by file except for build metadata ([Measurements](results.md)), but the kernel can't yet be compared byte for byte, so a compromised build machine could still change the kernel unnoticed (`docs/ATTACK_SURFACE.md`).
+- The machines that build the device's software weren't compromised. The endpoint binary is built on GitHub's CI from pinned sources; the image is built in a virtual machine on the laptop from hash-checked sources and checked afterwards. A second build on a clean runner matched it file by file except for build metadata, and the v1.1 build is reproducible between two CI runs, kernel included ([Measurements](results.md)); a laptop build hasn't been compared against them yet (`docs/ATTACK_SURFACE.md`).
 
 ## Out of scope
 

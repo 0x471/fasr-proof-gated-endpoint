@@ -167,7 +167,7 @@ What each one exposes, measured:
 
 - **How the v1 image is built** (`image/build.sh`, on a Linux VM because Buildroot doesn't build on macOS): download the Buildroot release and check its SHA-256, start from `raspberrypi4_64_defconfig`, add the static endpoint, the firewall and a fixed address (`image/v1.fragment`), apply the signed update into the store exactly as the device would, and check that every added option, kernel option included, survived the build.
 - **The 2 Nov rebuild** adds a locked-down kernel (no kernel modules on the image and module loading switched off at boot, kernel lockdown, no raw memory, debugger or tracing interfaces, no IPv6, radios, sound or USB; `image/kernel.fragment`) and removes every login prompt. Its check on the Pi is pending.
-- **Built twice:** the 2 Nov image was also built on a clean GitHub runner and compared file by file: the user space matches except for build metadata, but the kernel can't be compared byte for byte yet ([Measurements](results.md)).
+- **Built twice:** the 2 Nov image was also built on a clean GitHub runner and compared file by file: the user space matched except for build metadata. The v1.1 build is reproducible: two CI builds are identical, kernel included, apart from the files signed with a throwaway key ([Measurements](results.md)).
 - **What v1 still lacks:** the second port, and a way to deliver an update on the device itself.
 
 **Secure boot (v2, planned):**
