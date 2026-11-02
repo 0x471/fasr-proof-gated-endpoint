@@ -1,4 +1,8 @@
-# Deploying the book privately
+# Deploying the book
+
+**Since 2 Nov 2026 the book is public** at `https://proof-gated-endpoint.pages.dev`, a separate Pages project with no Cloudflare Access. CI runs `CF_PAGES_PROJECT=proof-gated-endpoint book/deploy-cloudflare.sh public` on every push to `main` that touches the book; the script builds, uploads and checks that the address answers 200. The old private project, `proof-gated-egress`, keeps both of its Access applications, so its earlier uploads stay locked. The rest of this page describes the private setup, kept in case a private copy is needed again.
+
+## Private setup (the original)
 
 GitHub Pages can't restrict who reads a site on a personal account: private Pages need GitHub Enterprise Cloud, and a site built from a private repository is otherwise public. So the book is hosted on **Cloudflare Pages** behind **Cloudflare Access**: readers sign in with an email address you've allowed, using a one-time code sent to that address. Cloudflare's Zero Trust free plan covers this for fewer than 50 users.
 
