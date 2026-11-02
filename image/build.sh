@@ -52,7 +52,7 @@ make -C "$BR" O="$WORK/out" raspberrypi4_64_defconfig
 cat "$WORK/fragment" >> "$WORK/out/.config"
 make -C "$BR" O="$WORK/out" olddefconfig
 # Every fragment line must survive olddefconfig, or the image isn't what the fragment says.
-grep -E '^BR2_' "$WORK/fragment" | while read -r line; do
+grep -E '^BR2_|^# BR2_.* is not set$' "$WORK/fragment" | while read -r line; do
   grep -qxF "$line" "$WORK/out/.config" || { echo "config lost: $line" >&2; exit 1; }
 done
 grep -qx '# BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW is not set' "$WORK/out/.config" || { echo "root filesystem would be writable" >&2; exit 1; }
@@ -61,4 +61,6 @@ make -C "$BR" O="$WORK/out"
 grep -E '^CONFIG_|^# CONFIG_.* is not set$' "$HERE/kernel.fragment" | while read -r line; do
   grep -qxF "$line" "$WORK/out/build/linux-custom/.config" || { echo "kernel lacks $line: make linux-reconfigure" >&2; exit 1; }
 done
+grep -q '^[^#].*/sbin/getty' "$WORK/out/target/etc/inittab" && { echo "a login prompt is still in inittab" >&2; exit 1; }
+grep -q '^root:\*:' "$WORK/out/target/etc/shadow" || { echo "root login is not locked" >&2; exit 1; }
 sha256sum "$WORK/out/images/sdcard.img"
