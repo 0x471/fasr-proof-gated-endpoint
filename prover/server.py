@@ -10,6 +10,7 @@ misbehave, for the service tests and as the start of the W4 malicious-prover har
   tamper_output    change the first output value
   replay           answer with the previous request's outputs and proof
   duplicate        answer twice
+  flood            answer, then send the same answer --batch more times (stale or duplicate copies)
   wrong_seq        answer with a seq that was never issued
   oversize         send a frame over the device's limit
   garbage          send a frame that isn't a well-formed answer
@@ -49,7 +50,7 @@ TINY = ROOT / "tests" / "fixtures" / "tiny"
 TINY_SETTINGS_SHA256 = "b4a95fc7c572816034708c4e5c079f0f91f82eb9681cfa069565aacc9887aefd"
 TINY_VK_SHA256 = "34ab48a8ac0946be4faf10d85699ac729adb20ec4c6251da1d1d0d4ea18a4d26"
 MODES = ("honest", "drop", "delay", "tamper_output", "replay", "duplicate", "wrong_seq", "oversize", "garbage",
-         "timing_bits", "order_bits", "fail_position", "load_bits")
+         "timing_bits", "order_bits", "fail_position", "load_bits", "flood")
 
 
 def bits_per_batch(k: int) -> int:
@@ -217,6 +218,8 @@ class Server:
         self.sent_at[seq] = asyncio.get_running_loop().time()
         if m == "duplicate":
             writer.write(frame(payload))
+        if m == "flood":
+            writer.write(frame(payload) * self.batch)
         self.sent += 1
         await writer.drain()
 

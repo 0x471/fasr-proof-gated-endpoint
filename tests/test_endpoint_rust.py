@@ -170,6 +170,8 @@ def test_modes_match_python(rust_bin, tiny_bundle, ezkl, tmp_path, mode, release
             assert all(r["ok"] for r in replies)
         if mode in ("tamper_output", "drop", "wrong_seq", "garbage", "oversize", "delay"):
             assert not any(r["ok"] for r in replies)
+        if mode == "flood":
+            assert [r["result"] for r in rs[1]].count("server_violation") == 1
     asyncio.run(go())
 
 

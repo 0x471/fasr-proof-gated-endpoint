@@ -12,7 +12,7 @@ import pytest
 
 from conftest import ROOT, TINY, TINY_X
 from pge.binding import split_instances
-from pge.protocol import REQUEST, Wire, frame, read_frame
+from pge.protocol import REQUEST, ProtocolError, Wire, frame, read_frame
 from pge.service import REASONS, Endpoint, Policy, file_log, load_domain
 from pge.verdict import Verdict
 
@@ -539,9 +539,37 @@ def test_unissued_seq_is_not_logged(tiny_bundle, verifier):
     async def go():
         records = []
         endpoint = Endpoint(spec=tiny_bundle.spec, verifier=verifier, log=records.append)
+        endpoint.seq = 1
         endpoint.on_answer(1234567890123456, [], b"x")
         assert records == [{"result": "stale_answer"}] and endpoint.counts["stale_answer"] == 1
     asyncio.run(go())
+
+
+def test_more_unexpected_answers_than_requests_is_a_violation(tiny_bundle, verifier):
+    # K51: each stale or duplicate answer writes a log line, so a server could fill the log
+    # (tmpfs on the device). An honest server sends at most one late answer per request.
+    async def go():
+        endpoint = Endpoint(spec=tiny_bundle.spec, verifier=verifier, log=lambda r: None)
+        with pytest.raises(ProtocolError):
+            endpoint.on_answer(7, [], b"x")
+        endpoint.seq = 2
+        endpoint.on_answer(7, [], b"x")
+        endpoint.on_answer(8, [], b"x")
+        with pytest.raises(ProtocolError):
+            endpoint.on_answer(9, [], b"x")
+        assert endpoint.counts["stale_answer"] == 2
+    asyncio.run(go())
+
+
+def test_a_flooding_server_is_disconnected(tiny_bundle, verifier):
+    async def t(st):
+        c = await st.client()
+        c.send(1, [TINY_X])
+        assert await c.recv() == {"id": 1, "ok": False, "error": "unavailable"}
+        results = st.results()
+        assert results.count("server_violation") == 1 and "disconnect" in results
+        assert results.count("stale_answer") + results.count("duplicate_answer") == 1
+    run_stack(tiny_bundle, verifier, t, server=server(tiny_bundle, "flood", batch=8))
 
 
 def test_server_violation_detail_is_fixed_text(tiny_bundle, verifier):
