@@ -44,7 +44,7 @@ outside clients (A3)  |  device  |  AI server (A1, A2)
 - **Complete mediation:** every path from the AI server to the outside crosses the endpoint. In v0 this is not enforced: the stock OS has SSH, mDNS, Wi-Fi and its own outbound traffic, and nothing stops the server from having another route out. The v1 image (two wired ports, nothing forwarded, no other services) is the first version where this can be claimed, and it has to be tested from both sides.
 - **Logs:** where the log goes and who reads it is not yet defined. If an outsider can read it, the log is an output channel (section 6).
 - The proof binds the encoded request and the outputs (docs/BINDING_SPEC.md), with one pinned model and fixed parameters.
-- Physical access is out of scope (Yogev, 14 Oct): no power, EM, acoustic or thermal channels, no tampering.
+- Physical access is out of scope (agreed with the mentor, 14 Oct): no power, EM, acoustic or thermal channels, no tampering.
 - What ordinary, correct outputs reveal about the model is out of scope (see 4.1).
 
 ### 4.1 Extraction through correct answers: out of scope, to confirm
