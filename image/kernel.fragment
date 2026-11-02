@@ -3,9 +3,10 @@ CONFIG_NF_CONNTRACK=y
 CONFIG_NF_TABLES=y
 CONFIG_NF_TABLES_IPV4=y
 CONFIG_NFT_CT=y
-# Hardening: no loadable modules, the kernel locked down against reading or changing itself, no raw
-# memory, debugger or tracing interfaces (kprobes go with modules), and nothing the device doesn't use (IPv6, radios, sound, USB).
-# CONFIG_MODULES is not set
+# Hardening: the kernel locked down against reading or changing itself, no raw memory, debugger or
+# tracing interfaces, and nothing the device doesn't use (IPv6, radios, sound, USB). Modules stay
+# configurable (turning them off builds every driver in) but none ship and loading is switched off at
+# boot (overlay /etc/sysctl.d/90-pge.conf).
 CONFIG_SECURITY_LOCKDOWN_LSM=y
 CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
 CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY=y
@@ -14,6 +15,7 @@ CONFIG_SECURITY_LANDLOCK=y
 CONFIG_LSM="lockdown,yama,landlock"
 # CONFIG_DEVMEM is not set
 # CONFIG_DEBUG_FS is not set
+# CONFIG_KPROBES is not set
 # CONFIG_KGDB is not set
 # CONFIG_FTRACE is not set
 # CONFIG_BPF_SYSCALL is not set

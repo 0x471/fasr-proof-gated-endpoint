@@ -4,3 +4,5 @@ set -euo pipefail
 rm -f "$TARGET_DIR/etc/init.d/S50crond"
 # No login prompts: the board script adds one on HDMI and the generic one sits on the serial console.
 sed -i '/^[^#].*\/sbin\/getty/d' "$TARGET_DIR/etc/inittab"
+# No kernel modules on the image; loading is switched off at boot anyway.
+rm -rf "$TARGET_DIR/lib/modules"
