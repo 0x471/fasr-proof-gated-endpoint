@@ -29,7 +29,7 @@ Today both links share one Ethernet cable, so the separation between the server 
 
 The server never gets to say what the question was. The endpoint rebuilds that part of the proof itself, so the server only supplies outputs and a proof, and they count only if the proof over the endpoint's question and those outputs verifies.
 
-![Sequence: the user sends a question; the endpoint parses and encodes it; a malformed message closes the connection and an impossible question gets bad_request, neither reaching the server; otherwise the endpoint forwards it, takes the first answer for that sequence number, verifies it with the EZKL CLI, and replies with the proven y or unavailable](diagrams/question.svg)
+![Sequence: the user sends a question; the endpoint parses and encodes it; a malformed message closes the connection and an impossible question gets bad_request, neither reaching the server; otherwise the endpoint forwards it, takes the first answer for that sequence number, verifies it in a separate, limited and sandboxed checker process, and replies with the proven y or unavailable](diagrams/question.svg)
 
 | Step | Code | Evidence |
 |---|---|---|
@@ -167,6 +167,7 @@ What each one exposes, measured:
 
 - **How the v1 image is built** (`image/build.sh`, on a Linux VM because Buildroot doesn't build on macOS): download the Buildroot release and check its SHA-256, start from `raspberrypi4_64_defconfig`, add the static endpoint, the firewall and a fixed address (`image/v1.fragment`), apply the signed update into the store exactly as the device would, and check that every added option, kernel option included, survived the build.
 - **The 2 Nov rebuild** adds a locked-down kernel (no kernel modules on the image and module loading switched off at boot, kernel lockdown, no raw memory, debugger or tracing interfaces, no IPv6, radios, sound or USB; `image/kernel.fragment`) and removes every login prompt. Its check on the Pi is pending.
+- **Built twice:** the 2 Nov image was also built on a clean GitHub runner and compared file by file: the user space matches except for build metadata, but the kernel can't be compared byte for byte yet ([Measurements](results.md)).
 - **What v1 still lacks:** the second port, and a way to deliver an update on the device itself.
 
 **Secure boot (v2, planned):**
@@ -198,8 +199,8 @@ Signals the server controls even with valid proofs:
 | Timing | fixed release time, plus spin | much reduced; see below |
 | Which answers fail | a cap on failures per window (Rust endpoint) | reduced at a large cost in availability; measured once on the Pi |
 | Reply size | fixed-size replies | blocked at the message level; packet-level details on the outside link not measured |
-| Logs | fixed words only | the number and timing of events still follow the server |
-| Keeping the endpoint busy | fixed time slots (planned) | open |
+| Logs | fixed words only; no more records for late, repeated or unasked-for answers than questions asked (K51) | the number and timing of events still follow the server |
+| Keeping the endpoint busy | fixed release: each question keeps its place until its release time | under fixed release, which users get `unavailable` for a full queue doesn't depend on the server (state-machine test, K17); open in arrival order; whether timed load moves releases (K34) is not measured yet |
 
 {{#include ../../docs/ATTACKS.md:summary}} Every row is in the [Attack catalogue](attacks.md); the full model is in [Threat model](threat-model.md).
 

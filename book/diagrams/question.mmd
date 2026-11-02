@@ -2,7 +2,7 @@ sequenceDiagram
     participant U as User
     participant G as Endpoint on the Pi
     participant S as Server
-    participant C as EZKL CLI child
+    participant C as Checker child, limited and sandboxed
     U->>G: question x, 41-byte payload
     G->>G: parse, encode x like EZKL, check x is answerable
     alt malformed message
@@ -15,7 +15,7 @@ sequenceDiagram
         S->>G: seq, outputs, proof
         G->>G: first answer for this seq only, proof exactly 3072 bytes
         G->>G: instances = own encoding of x + server outputs
-        G->>C: verify instances and proof, time left as the limit
+        G->>C: verify instances and proof with EZKL's verifier, time left as the limit
         C-->>G: ACCEPT, REJECT or ERROR
         alt ACCEPT before the deadline
             G-->>U: y decoded from the verified outputs, 34 bytes

@@ -10,12 +10,12 @@
 - **Two physical ports.** The v1 image runs the endpoint, but the server side and the outside still share one cable; a board with a second wired port is planned.
 - **v2:** secure boot (which permanently writes a key into the board, so it needs a spare board); a TPM counter so a whole older copy of the update store can't be restored (K43); a power-loss test of update installation on the Pi's file system; a hash-chained log sent to a separate collector.
 - **Update delivery on the device.** The image has no login; a new update comes as a new image or is applied to the card's store on another machine, where the same rollback and replay rules apply because the state lives on the card.
-- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and one Pi run showed far fewer hidden bits getting out at a large cost in availability ([Measurements](results.md)). Timing, logs and restarts need their own accounting.
+- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and one Pi run showed far fewer hidden bits getting out at a large cost in availability ([Measurements](results.md)). Timing needs its own accounting. The cap's count lives in memory, so it bounds failures per boot: any restart starts a fresh window (K50).
 
 ## Not measured yet
 
 - **A capacity bound.** The numbers are achieved rates for planted bits and one binned mutual-information statistic (`observer/estimate.py`, checked on synthetic channels with known values). Checking an estimator on known distributions is not a bound on what an arbitrary encoder and observer can achieve; no such bound is claimed.
-- **Several clients at once,** other loads, and a packet capture on the outside link.
+- **Several clients at once,** a server that times its answers to load the endpoint, and a packet capture on the outside link: the protocols are written (`docs/EXPERIMENT_PROTOCOL_2.md`, protocols 4 and 5, captures in 2, 4 and 5) but not run yet.
 - **The `busy` channel:** under fixed release, which requests come back `busy` doesn't depend on the server (a state-machine test, K17); in arrival order it does, and under load the event loop's own delays (K34) are not measured.
 - **The budget trade-off:** fixed release was run with one budget (4 s). How much of it honest answers use, with one and three clients, is in [Measurements](results.md); leakage against other budgets is not measured.
 - **The residual timing trace** under fixed release: its mechanism (two candidates: how long the processor takes to wake from idle, and its speed changing with load; the v1 image's kernel defaults to the lowest processor speed, which may be why its run showed nothing), and whether the redesigned spin removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.
