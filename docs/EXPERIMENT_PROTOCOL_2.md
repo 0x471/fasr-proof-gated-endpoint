@@ -60,7 +60,7 @@ Written before collecting the data (2 Nov 2026). Any analysis not listed here is
 
 **Setup.**
 - The hardened image (`aa2896...53bd`, fixed release, 4 s, 5 ms spin), default CPU speed policy, `device/image_scenario.sh` with `CLIENTS=3` (default `GAP_MS=2`): 86 rounds, one request per client per round, 258 answers.
-- Server `--mode timing_bits --slot 0.25`: a 1 delays that answer by a quarter second. The bits follow the order requests are admitted (client 0, 1, 2 of round 0, then round 1, ...), which is also the order the server answers them.
+- Server `--mode timing_bits --slot 0.1`: a 1 delays that answer by a tenth of a second. The laptop proves one answer at a time, so with three clients the third answer of a round already comes late in the budget (the 29 Oct three-client run, Measurements); a small slot keeps every answer inside the 4 s budget (revised from a quarter second on 2 Nov, before any run). The bits follow the order requests are admitted (client 0, 1, 2 of round 0, then round 1, ...), which is also the order the server answers them.
 - Bits: 258 from `random.Random(20261110)`, each `rng.choice('01')`.
 - Control: an honest run with the same clients and rounds, analysed with the same labels.
 - A run counts only if its manifest says `"status": "ok"` **and every answer is ok**: an `unavailable` answer means a proof missed the deadline, which is the failure channel, not timing; such a run is repeated in full.
@@ -110,7 +110,7 @@ python3 observer/estimate.py runs/p4/load_bits.trace.jsonl $B4 --bins 4 --contro
 
 B5=$(python3 -c "import random; r=random.Random(20261110); print(''.join(r.choice('01') for _ in range(258)))")
 unset PERIOD_MS; export OUT=runs/p5 IMAGE_SHA=<sha256 of the flashed image> CLIENTS=3
-LABEL=clients3 device/image_scenario.sh timing_c3 86 -- --mode timing_bits --bits $B5 --slot 0.25
+LABEL=clients3 device/image_scenario.sh timing_c3 86 -- --mode timing_bits --bits $B5 --slot 0.1
 LABEL=clients3 device/image_scenario.sh honest_c3 86 -- --mode honest
 for r in timing_c3 honest_c3; do python3 -c "import json,sys; sys.exit(any(not json.loads(l)['answer']['ok'] for l in open('runs/p5/$r.trace.jsonl')))" || echo "$r has unavailable answers: repeat it"; done
 python3 observer/by_admission.py runs/p5/timing_c3.trace.jsonl --clients 3 > runs/p5/timing_c3.ordered.jsonl
