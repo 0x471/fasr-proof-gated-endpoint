@@ -1,4 +1,4 @@
-# Experiment protocols 2 and 3: the timing residue's cause, and the failure-cap trade-off
+# Experiment protocols 2-4: the timing residue's cause, the failure-cap trade-off, and load
 
 Written before collecting the data (2 Nov 2026). Any analysis not listed here is exploratory and is reported as such. Protocol 1 is `EXPERIMENT_PROTOCOL.md`.
 
@@ -37,6 +37,23 @@ Written before collecting the data (2 Nov 2026). Any analysis not listed here is
 
 **Reported alongside:** the counted upper bound for the same cap and N (`observer/cap_bound.py`), so the measured bits can be read against what any failure-pattern code could carry.
 
+## Protocol 4: does a proof check running at a release move that release? (K34, written 2 Nov)
+
+**Question.** Under fixed release the server can't choose when an answer leaves, but it can choose when the endpoint's checker is busy, by timing the answers it sends. Checks run one at a time in a child process, beside the event loop that releases replies. Does a check that overlaps a release shift that release enough for an observer to read?
+
+**Setup.**
+- The hardened image (`aa2896...53bd`, its own policy: fixed release, 4 s, 5 ms spin), the default CPU speed policy (no `cmdline.txt` change), `device/image_scenario.sh` with `PERIOD_MS=1000`: one connection, one request a second, not waiting for answers.
+- Server `--mode load_bits --period 1.0 --deadline 4.0 --lead 0.05 --shift 0.5`: exactly one answer per second either way; for bit k = 1 the answer to request k+1 is sent `--lead` before request k's release, so its check (the Rust checker's time per check is on the Measurements page, several times `--lead`) overlaps that release; for a 0 it is sent `--lead` + `--shift` before, so the check ends well before that release and starts well after the previous one.
+- Bits: 255 from `random.Random(20261109)`, each `rng.choice('01')`, then a final `0` (request 255 has no next answer to carry a bit). N = 256.
+- Control: the same server with 256 zeros (the same load every second, never at a release), analysed with the same labels.
+- A run counts only if its manifest says `"status": "ok"` (every answer ok, no late send by the server).
+
+**Primary analysis**: the held-out threshold decoder (`observer/jitter_test.py --heldout 2000`) on the load run with the control as `--control`; decision rule as in protocol 1 (shown if the load run has p < 0.01 and the control p > 0.05; not detected if the load run has p > 0.05; otherwise inconclusive).
+
+**How the outcome will be read** (fixed now): shown means a server can move releases through load alone, and the bound for fixed release has to include it; not detected means one overlapping check per release isn't enough on this image at n = 256, not that load is harmless (several overlapping checks, flooding the loop with stale answers, and several clients are untested).
+
+**Secondary**: mean difference with its permutation p (`--perms 20000`); mutual information with 4 bins (`observer/estimate.py`).
+
 ## Commands
 ```sh
 B2=$(python3 -c "import random; r=random.Random(20261102); print(''.join(r.choice('01') for _ in range(256)))")
@@ -56,5 +73,13 @@ HALT=1 device/pi_scenario.sh fp_halt1 fixed 128 1 -- --mode fail_position --batc
 CAP="64 1 64" device/pi_scenario.sh honest_cap_64_1_64 fixed 128 1 -- --mode honest
 python3 observer/cap_check.py runs/p3/fp_cap_64_1_64.trace.jsonl $B3 --cap 64 1 64
 python3 observer/cap_bound.py --window 64 --failures 1 --cooldown 64 --n 128
+
+B4=$(python3 -c "import random; r=random.Random(20261109); print(''.join(r.choice('01') for _ in range(255)) + '0')")
+Z4=$(python3 -c "print('0' * 256)")
+export OUT=runs/p4 IMAGE_SHA=<sha256 of the flashed image> PERIOD_MS=1000
+LABEL=load device/image_scenario.sh load_bits 256 -- --mode load_bits --bits $B4 --period 1.0 --deadline 4.0 --lead 0.05 --shift 0.5
+LABEL=load device/image_scenario.sh load_zero 256 -- --mode load_bits --bits $Z4 --period 1.0 --deadline 4.0 --lead 0.05 --shift 0.5
+python3 observer/jitter_test.py runs/p4/load_bits.trace.jsonl $B4 --control runs/p4/load_zero.trace.jsonl --perms 20000 --heldout 2000
+python3 observer/estimate.py runs/p4/load_bits.trace.jsonl $B4 --bins 4 --control runs/p4/load_zero.trace.jsonl
 ```
-Protocol 2 takes about 17 minutes per run (six runs); protocol 3 about 9 minutes per run (five runs).
+Protocol 2 takes about 17 minutes per run (six runs); protocol 3 about 9 minutes per run (five runs); protocol 4 about 5 minutes per run (two runs).
