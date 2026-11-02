@@ -1,0 +1,59 @@
+name: image
+# A second build of the device image on a clean runner, to compare file by file with the laptop's build.
+# The update is signed with a throwaway key, so /etc/pge/root.pub and the data partition differ by design.
+on:
+  workflow_dispatch:
+    inputs:
+      endpoint_sha:
+        description: full commit whose static aarch64 endpoint (rust endpoint workflow artifact) goes in
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v7
+      - name: fetch the endpoint CI built for that commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.endpoint_sha }}
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "endpoint_sha must be a full commit hash"; exit 1; }
+          run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow rust-endpoint.yml --commit "$SHA" --status success --limit 1 --json databaseId -q '.[0].databaseId')"
+          [ -n "$run" ] || { echo "no successful rust endpoint run for $SHA"; exit 1; }
+          gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "pge-endpoint-aarch64-musl-$SHA" --dir "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP/bin" && sha256sum -c pge-endpoint.sha256
+      - name: host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc cpio file rsync unzip wget libncurses-dev libssl-dev pkg-config
+      - name: build the signing tool
+        run: |
+          rustup toolchain install nightly-2025-12-01 --profile minimal
+          bash endpoint/prepare.sh
+          CARGO_HOME="$PWD/.deps/cargo" cargo +nightly-2025-12-01 build --manifest-path endpoint/Cargo.toml --release --locked -p pge-update --bin pge-sign
+      - name: sign an update with a throwaway key
+        run: |
+          curl --fail --location --connect-timeout 10 --max-time 120 https://kzg.ezkl.xyz/kzg15.srs -o "$RUNNER_TEMP/kzg.srs"
+          echo "90807800a1c3b248a452e1732c45ee5099f38b737356f5542c0584ec9c3ebb45  $RUNNER_TEMP/kzg.srs" | sha256sum -c -
+          PGE_SIGN=endpoint/target/release/pge-sign PGE_SRS="$RUNNER_TEMP/kzg.srs" image/make_update.sh "$RUNNER_TEMP/keys" "$RUNNER_TEMP/update" 1
+      - name: build the image
+        run: |
+          BIN="$RUNNER_TEMP/bin/pge-endpoint" UPDATE="$RUNNER_TEMP/update" ROOT_PUB="$RUNNER_TEMP/keys/root.pub" \
+            image/build.sh "$RUNNER_TEMP/img"
+      - name: list the image's files
+        run: |
+          mkdir out
+          sudo image/manifest.sh "$RUNNER_TEMP/img/out/images/sdcard.img" > out/files.txt
+          cp "$RUNNER_TEMP/img/out/images/sdcard.img" "$RUNNER_TEMP/img/out/build/linux-custom/.config" out/
+          mv out/.config out/kernel.config
+          (cd out && sha256sum sdcard.img files.txt kernel.config | tee SHA256SUMS)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-${{ github.sha }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 90
