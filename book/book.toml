@@ -5,7 +5,6 @@ language = "en"
 src = "src"
 
 [output.html]
-git-repository-url = "https://github.com/0x471/fasr-proof-gated-egress"
 site-url = "/fasr-proof-gated-egress/"
 no-section-label = false
 
