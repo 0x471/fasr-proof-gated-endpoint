@@ -16,7 +16,7 @@
 
 - **A capacity bound.** The numbers are achieved rates for planted bits and one binned mutual-information statistic (`observer/estimate.py`, checked on synthetic channels with known values). Checking an estimator on known distributions is not a bound on what an arbitrary encoder and observer can achieve; no such bound is claimed.
 - **Several clients at once,** other loads, and a packet capture on the outside link.
-- **The `busy` channel:** a server that holds requests open makes other clients' requests fail; it depends on load and is not measured.
+- **The `busy` channel:** under fixed release, which requests come back `busy` doesn't depend on the server (a state-machine test, K17); in arrival order it does, and under load the event loop's own delays (K34) are not measured.
 - **The budget trade-off:** fixed release was run with one budget (4 s); leakage and lost answers against the budget are not measured.
 - **The residual timing trace** under fixed release: its mechanism (two candidates: how long the processor takes to wake from idle, and its speed changing with load; the v1 image's kernel defaults to the lowest processor speed, which may be why its run showed nothing), and whether the redesigned spin removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.
 
