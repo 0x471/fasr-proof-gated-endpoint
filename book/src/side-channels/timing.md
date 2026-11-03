@@ -15,7 +15,7 @@ A hacked server controls when it sends each answer. It proves the answer correct
 | 2 | 0 | answers at once | a fast reply: 0 |
 | 3 | 1 | waits a second | slow: 1 |
 
-The endpoint cannot simply reject slow answers. Real servers are sometimes slow for honest reasons, and "slow on purpose" looks the same. A careful attacker would also use delays of milliseconds, hidden in normal variation, and recover them with statistics.
+The endpoint cannot tell deliberate delay from honest slowness. An attacker can also try smaller delays, hidden in normal variation, and use statistics to recover them.
 
 ## The defence: fixed release
 
@@ -35,19 +35,21 @@ The endpoint does not compute "4 s minus the verification time". At admission it
 
 ![Admission fixes the release target; a checked answer or unavailable leaves no earlier than that target](../diagrams/fixed-release.svg)
 
-**The cost:** every user waits the full budget, even when the answer was ready much sooner. The budget must also exceed an honest answer's time, or honest answers fail. A slower prover needs a longer budget.
+The cost: every admitted reply waits the full budget, even when the answer was ready much sooner. The budget must allow honest proving, transport and checking, or honest answers fail. A slower prover needs a longer budget.
 
 ## Why not a random delay?
 
 A natural idea is to add a random wait, say between one and three seconds, to drown the server's delay in noise. We modelled this (`observer/sleep_vs_fixed.py`; a model, not a device run).
 
-Random waits keep leaking. Suppose the server's code shifts an answer by d, and the endpoint adds a random wait between 0 and R. Most replies then reveal nothing, but those near the edges of the window reveal the bit for certain. On average the observer learns exactly d/R bits per answer. A server free to delay by more can carry more, so the random wait must grow with the server's freedom.
+Suppose the server uses equally likely bits and delays only the 1-bits by d. The endpoint adds an independent, uniform random wait between 0 and R, with no other noise. When d is between 0 and R, replies in the overlapping windows reveal nothing; replies outside the overlap reveal the bit. The average information is d/R bits per answer, reaching one bit when the windows no longer overlap.
 
-In the simulated runs below, every random wait still leaked, while fixed release showed nothing. The setup and the full model are in [Measurements](../results.md#random-sleeps-instead-of-a-fixed-release-time-a-model-2-nov).
+That exact result belongs to this model. Extra independent noise can reduce the information, and other delay distributions need their own analysis. Random waiting does not by itself remove the server's timing choice.
+
+Every random-wait configuration in the table still showed a signal; ideal fixed release did not. A smaller follow-up simulation did not detect some of the random-wait signals. Both setups are in [Measurements](../results.md#random-sleeps-instead-of-a-fixed-release-time-a-model-2-nov).
 
 {{#include ../results.md:random-sleeps}}
 
-Fixed release removes the server's influence instead of hiding it. It is still a time delay, just not a random one.
+Ideal fixed release removes this delay choice when the answer is ready before the target. The device's clock scheduling is less simple, as the next experiment shows.
 
 ## The leftover trace
 
@@ -55,21 +57,23 @@ Fixed release stopped our one-second code, but a much finer test found a trace:
 
 {{#include ../results.md:no-spin-trace}}
 
-The schedule was not at fault. The difference came from how quickly the computer acts on it. Our leading explanation, not yet proven:
+The reply targets were fixed, but observed times differed. Our leading explanation concerns how the processor acts on those targets. It is not proven:
 
 - For a 1, the server answered late, so the endpoint had just been checking that proof. The processor was busy and awake when the release time came.
-- For a 0, the server answered early, so the processor had been idle for seconds. It had dropped into a deeper rest and took a little longer to wake.
+- For a 0, the server answered early. The processor may have entered a deeper rest during the wait and taken longer to wake.
 
-A second possibility is that the processor's speed changes with load. Either way, the server's choice changes the processor's state, and the state changes the release time slightly.
+A second possibility is that processor speed changed with load. Neither mechanism was isolated by these runs, so neither is an established cause.
 
 ## What "spin" means
 
 A program can wait for a moment in two ways:
 
-- **Sleep:** ask the operating system to wake it at the target time. This is cheap, but waking takes a small, variable time.
-- **Spin:** stay awake and check the clock in a loop until the target time. This is precise, but keeps a processor core fully busy.
+- **Sleep:** ask the operating system to wake it at the target time. Waking can be late.
+- **Spin:** stay awake and check the clock in a loop until the target time. This avoids a sleep wake-up, but consumes processor time and can still be interrupted.
 
-Our endpoint sleeps until 5 ms before the release time, then spins for the last 5 ms. The processor is awake at release either way, so the server's choice should no longer change the timing.
+Our endpoint aims to wake 5 ms before release, then spins for at most 5 ms. A late wake-up shortens or skips that spin. The loop allows at most one spin per callback, so this is not a promise to spin before every reply under load.
+
+Spin might reduce dependence on the processor's earlier state. The runs below do not establish that it caused the difference: they were taken on different days.
 
 {{#include ../results.md:spin-verdict}}
 
@@ -79,19 +83,21 @@ A server could also try to delay releases indirectly: time its answers so that a
 
 {{#include ../results.md:load-and-clients}}
 
-A longer three-user test with six times the answers is registered as protocol 6 (`docs/EXPERIMENT_PROTOCOL_3.md`) and has not run yet.
+Each was one run with one control. Stacked proof checks, floods and competing work on the same core were not tested. Packet captures were not taken.
+
+A longer three-user test with roughly six times the answers is registered as protocol 6 (`docs/EXPERIMENT_PROTOCOL_3.md`). It has no reported result in this snapshot.
 
 ## Why measurements cannot prove timing is safe
 
-"Not detected" is not "small". We asked how large a shift each run still allows, and what such a shift could carry under a simple noise model:
+"Not detected" is not "small". We estimated how large this encoder's shift in average reply time could be, using the measured data. We then converted that estimate to information under a Gaussian noise model, which assumes bell-shaped random variation:
 
 {{#include ../results.md:timing-limits}}
 
-The limit falls only about as fast as the number of answers grows: halving it needs roughly twice the answers. A clever code could also hide in details no test looked at. So a guaranteed bound cannot come from measurement alone. Details are in [Measurements](../results.md#what-the-timing-data-can-rule-out-3-nov-analysis-of-earlier-runs).
+This is a model-based confidence estimate, not a ceiling on every timing attack. Near zero shift, with similar noise, its estimated information limit falls roughly inversely with sample size. Other encodings or noise distributions can behave differently. Details are in [Measurements](../results.md#what-the-timing-data-can-rule-out-3-nov-analysis-of-earlier-runs).
 
 ## Two routes to a real bound
 
-1. **Remove the server's influence by design.** Fixed release is the first step. The next is a release stage that cannot see what the checker or the server did, such as its own processor core or a separate small chip that only holds the schedule. We plan to test running the release loop on its own core.
-2. **Charge for what is left.** Petrie, Muhlhauser and Drotos (2026) have the server commit in advance to a predicted spread of reply times, and charge each observed time against a budget of leaked bits. Their design also groups replies into fixed time windows.
+1. Remove the server's influence by design. A separate core or small scheduling chip might isolate the release stage from proof checking. Neither is established here as independent of server activity. Running the release loop on its own core is proposed work.
+2. Charge for what is left. Petrie, Muhlhauser and Drotos propose committing to a predicted distribution of reply times and accounting for unexpected timing. Their paper, *Verifying AI Compute by Bounding Unexplained Information Exfiltration* (2026), also proposes fixed time windows. It describes an architecture, not a measured solution for this endpoint.
 
-The two routes combine well: the better the design removes timing freedom, the less there is to charge.
+These routes could complement each other, but neither supplies a complete timing bound for this device today.
