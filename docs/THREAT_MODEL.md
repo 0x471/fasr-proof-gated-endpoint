@@ -1,6 +1,8 @@
 # Threat model
 
-Living document: started in W2, updated after each version and each adversarial-testing session, final in W7. Status as of 20 Oct 2026: v0 measured on the Pi, the v1 software (including fixed release) measured on the Pi on the v0 OS; a v1 development image boots but doesn't run the endpoint yet; v2 is not built.
+This living document began in W2 and is updated after each version and adversarial-testing session. It is due to be final in W7.
+
+The 20 Oct 2026 snapshot was: v0 measured on the Pi; v1 software, including fixed release, measured on the stock v0 OS. The v1 development image booted without an endpoint; v2 was not built. Later measurements are recorded in `book/src/results.md`.
 
 ## 1. What the device protects
 

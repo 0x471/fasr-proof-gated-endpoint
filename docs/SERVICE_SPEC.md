@@ -1,10 +1,14 @@
 # Endpoint service (v1 software)
 
-The device as a network service: clients send requests to the device, the device forwards them to the AI server (the prover), checks each answer's proof against its own encoding of the request, and releases either the decoded output or an error. There are two error strings: `bad_request`, which depends only on the client's own request, and `unavailable` for every failure that involves the server. Code: `pge/service.py`, `pge/protocol.py`. Laptop prover: `prover/server.py`. Tests: `tests/test_service.py`, `tests/test_protocol.py`.
+Clients send questions to the endpoint, which forwards them to the AI server, or prover. It checks each proof against its own encoding of the question, then releases decoded output or a fixed error.
 
-From 26 Oct the device runs the Rust endpoint (`endpoint/`, see `endpoint/README.md`). It implements this specification for `arrival` and `fixed` release, and `tests/test_endpoint_rust.py` checks it against the Python endpoint reply for reply and log record for log record. The failure cap (section 5) and the `accept_failed` record exist only in the Rust endpoint; the Python endpoint stays as the reference for everything else.
+`bad_request` depends only on the client's question. Every server-related failure gives `unavailable`. Code: `pge/service.py`, `pge/protocol.py`; laptop prover: `prover/server.py`; tests: `tests/test_service.py`, `tests/test_protocol.py`.
 
-This is the v1 software, still run on the v0 OS until the v1 image exists. Compared with v0 (commit `f8e27e0`): fixed-size binary frames instead of JSON, answers released in arrival order, log records with fixed words only, and resource limits on the verifier. `--release fixed` (19 Oct) sends admitted answers in admission order, each no earlier than admission + deadline, which hides most of the server's timing; a small residue was measured, and the failure channel stays open (section 4, step 6). `--release immediate` restores v0's release behaviour for comparisons.
+From 26 Oct, the device runs Rust (`endpoint/`; instructions in `endpoint/README.md`). It implements `arrival` and `fixed` release. `tests/test_endpoint_rust.py` compares replies and log records against Python. Only Rust implements the failure cap and `accept_failed` record; Python remains the reference for everything else.
+
+The v1 software was first measured on the v0 OS, before the v1 image. Compared with v0 at `f8e27e0`, it adds fixed-size binary frames, arrival-order release, fixed-word logs and verifier resource limits.
+
+`--release fixed`, added 19 Oct, releases admitted replies in admission order, never before admission + deadline. It hides most server timing, but a small residue was measured and failures still leak. See section 4, step 6. `--release immediate` restores v0 release behaviour for comparison.
 
 ## 1. Connections
 

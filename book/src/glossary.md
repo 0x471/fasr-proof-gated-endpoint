@@ -1,39 +1,49 @@
 # Glossary
 
-**Arrival order.** A release rule: each answer leaves only after the answers to every earlier question. Stops the server from choosing the order.
+## The system
 
-**Bit.** The smallest unit of information: one yes/no. 16 bits is enough for two letters of text. Leak rates here are in bits per answer or per second.
+| Term | Meaning |
+|---|---|
+| Endpoint | The Raspberry Pi running checking software between the AI server and the outside world. |
+| Proof, or zero-knowledge proof | Short evidence that a specific computation produced a specific output. It can be checked quickly without repeating the computation. |
+| Proof-system soundness | The assumption that the proof system resists false computation claims. This project does not assess it. |
+| Bundle | Approved model settings, verification key and public setup file. Each file is pinned by hash. |
+| Hash or pin | A file fingerprint. Pinning means refusing to run if a file differs from the approved fingerprint. |
+| Verification key, vk | The approved model's public key for checking proofs. |
+| SRS | The proof system's public setup file, pinned like the other bundle files. |
+| Request binding | Connecting the proof to the endpoint's question, approved model and interpretation of output. |
+| EZKL | The tool proving and checking our small model. Its source is public. Pinned release 23.0.5 has no licence file; the Apache-2.0 licence was removed in January 2024. |
+| Parser | Code that reads an incoming message according to its format. |
+| Fuzzing | Testing parsers with random and corrupted messages; accepted messages must re-encode identically. This is not a timing experiment. |
+| TPM | A hardware component whose counter is planned to prevent restoring an older update store. That protection is not built yet. |
 
-**Bundle.** The approved model's files the endpoint needs to check proofs: its settings, its verification key and the setup file (SRS). The endpoint pins each by its hash.
+## Answers and release
 
-**Channel.** Any way a hacked server can get information to someone outside: timing, order, failures, packet sizes, the endpoint's logs.
+| Term | Meaning |
+|---|---|
+| Release rule, or policy | When replies leave: immediately, in arrival order, or at a fixed time. |
+| Arrival order | Each reply follows all earlier questions' replies. This removes the server's choice of order. |
+| Deadline or budget | How long the endpoint allows for a valid answer before returning `unavailable`. Under fixed release, it also sets the earliest release time. |
+| Fixed-time release | Replies follow arrival order and never leave before their set time. It promises no latest time. It hides most server timing at a latency cost; a trace remained without spin. Actual lateness is in [Measurements](results.md). |
+| Spin | Waking early and busy-waiting until the release time. |
+| Replay | Reusing an old valid answer. No pending question receives two replies, but a new question with the same encoding can accept an old proof. For one deterministic model this gives no output choice; it does not prove fresh computation. |
+| `unavailable` | The single server-related error reply. It omits the cause so error text cannot carry the server's message. |
 
-**Deadline / budget.** How long the endpoint waits for a valid answer before replying `unavailable`. With fixed-time release, every answer also leaves no earlier than its deadline.
+## Leakage and statistics
 
-**Endpoint.** The Raspberry Pi running the checking software, between the AI server and the outside world.
+| Term | Meaning |
+|---|---|
+| Bit | One yes/no choice; 16 bits can hold two text letters. Rates here are bits per answer or second. |
+| Channel | A way to convey information outside: timing, order, failures, packet sizes or logs. |
+| Side channel | Information carried outside content: when, in what order or whether something happens. |
+| Residual | Leakage remaining after a defence; here, the sub-millisecond trace under fixed release. |
+| Permutation test | Shuffle planted labels thousands of times. The p-value is the fraction producing a difference at least as large as the observed one. |
+| Held-out decoder | Fit a threshold on half the answers, test on the other half, then swap. The null test refits on each label shuffle. |
+| Mutual information | Here, how many bits the binned arrival time reveals about the planted bit, against shuffled labels. It describes that statistic, not a leakage bound. |
+| Honest control | Repeat the analysis while the server hides nothing. Any apparent signal is noise. |
 
-**EZKL.** The tool used here to prove the outputs of a small machine-learning model and to check those proofs. Its source is public; release 23.0.5, the one pinned here, carries no licence file (the Apache-2.0 licence was removed from the repository in January 2024).
+## Versions
 
-**Fixed-time release.** A release rule: answers leave in arrival order, each never earlier than a set time after its question, whatever the server did. It promises "never early", not a latest time; how late answers actually left is in Measurements. It hides most of the server's timing at the cost of speed; a small trace was measured without spin.
-
-**Hash / pin.** A short fingerprint of a file. "Pinned by hash" means the endpoint refuses to run if the file's fingerprint differs from the approved one.
-
-**Proof (zero-knowledge proof).** A short piece of data showing that a specific computation produced a specific output, which anyone can check quickly without redoing the computation.
-
-**Release rule (release policy).** When the endpoint sends an answer back: immediately, in arrival order, or at a fixed time.
-
-**Replay.** Sending an old valid answer again. The endpoint matches each answer to exactly one pending question, so no question gets two answers. An old proof for the same question can still answer a new request; for one deterministic model that gives the server no choice of output, but it isn't proof of fresh computation.
-
-**Request binding.** Making sure a proof is about **this** question, **this** model and **this** reading of the output, not just "some valid computation".
-
-**Residual.** What still leaks after a defence. Here: the sub-millisecond timing trace left by fixed-time release.
-
-**Side channel.** A channel that isn't the content itself: when, in what order or whether something happens.
-
-**SRS.** The public setup file the proof system needs. Pinned by hash like the rest of the bundle.
-
-**`unavailable`.** The endpoint's single error reply for anything involving the server. It never says why, so the server can't use the error text to signal.
-
-**v0, v1, v2.** The endpoint's versions: v0, the Python endpoint on the standard Pi system; v1, the Rust endpoint (stricter release rules, a failure cap, a sandboxed checker, signed updates) on a stripped-down, read-only system; v2 adds secure boot, two physical ports, a counter against restoring an old update store, and signed images.
-
-**Verification key (vk).** The approved model's public key for checking its proofs.
+- v0: Python endpoint on the standard Pi system.
+- v1: Rust endpoint on a stripped, read-only system, with stricter release rules, failure cap, sandboxed checker and signed updates.
+- v2, planned: secure boot, two physical ports, a counter against restoring old update stores and signed images.

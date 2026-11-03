@@ -4,9 +4,9 @@
 
 # Understand
 
-- [How the endpoint works](tour.md)
+- [How it works](tour.md)
 - [What a hacked server can still leak](leakage.md)
-- [How hard the endpoint is to attack](hardening.md)
+- [How hard it is to attack](hardening.md)
 - [Limitations and open questions](limitations.md)
 
 # Evidence
@@ -17,7 +17,7 @@
 
 # Reference
 
-- [Endpoint service specification](service-spec.md)
+- [Service specification](service-spec.md)
 - [Request binding specification](binding-spec.md)
 - [Reproduce the results](reproduce.md)
 - [Repository map](repo-map.md)

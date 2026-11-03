@@ -1,6 +1,8 @@
 # Known-attacks catalogue
 
-Every scenario catalogued against the device, by us, by reviewers or by testers: what it targets, how far it got, and its evidence (a test, a Pi run, or none yet). Living document; final in W7.
+Each scenario records its target, outcome and evidence: an automated test, a Pi run or none yet. The catalogue includes our work and scenarios from reviewers and testers. It is a living document, due to be final in W7.
+
+"Stopped" means the endpoint refused or neutralised the attack in a test or run. It does not mean the device stopped working. Read the version and evidence level alongside every result.
 
 <!-- ANCHOR: summary -->
 The catalogue has 53 scenarios: 39 stopped, 2 allowed on purpose, 10 that still work, are only partly stopped or are untested, and 2 out of scope. Some were shown on the Pi, some only in tests, and some are only proposed; the counts describe coverage, not a security score.

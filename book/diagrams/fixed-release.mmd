@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant U as User
+    participant E as Endpoint
+    participant S as Server
+    U->>E: Question admitted
+    Note over E: due = admission time<br/>+ 4 s
+    E->>S: Question
+    S-->>E: Answer and proof, or no answer
+    Note over E: Check proof.<br/>Keep due fixed.
+    Note over E: Wake 5 ms early.<br/>Spin until due.
+    alt Valid answer checked by due
+        E-->>U: Proven output
+    else Not checked in time, or invalid
+        E-->>U: unavailable
+    end
+    Note over U,E: Never before due.<br/>OS and network may<br/>delay arrival.

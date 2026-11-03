@@ -1,42 +1,44 @@
 # Proof-gated endpoint
 
 > **In short**
-> - A small computer (a Raspberry Pi) sits between an AI server and the outside world. It lets an answer out only if a cryptographic proof shows the approved model produced it from that exact question.
-> - That stops a hacked server from changing **what** an answer says. It doesn't stop it from signalling through **when** answers leave, **in what order**, or **which ones fail**.
-> - We measured those three signals on the real device, one client at a time. Release rules stopped the ordering and timing codes we tried (timing at a cost in speed, with a small trace whose status is in the table below); deliberate failures still get through, fewer of them with a cap that costs availability.
+> - A Raspberry Pi checks proofs before letting an AI server's answers reach a user.
+> - Proofs fix answer content. Timing, order and failures can still carry hidden data.
+> - We measured these signals on a toy model. This is work in progress, not production security.
 
-This work was supported by ERA's Frontier AI Security Residency. It is work in progress (November 2026), not production security.
+## The problem
 
-## Why this matters
+An AI lab's most valuable asset is its model's weights: the numbers that define the model. A hacked server, or a model acting against its owners, could hide those weights in ordinary answers.
 
-The most valuable thing an AI lab owns is its model's weights. A hacked server, or a model acting against its owners, could try to smuggle weights out a little at a time, hidden inside ordinary answers. If every answer has to pass through a checkpoint that verifies a proof, the server loses the freedom to hide data in the content of its answers. The checkpoint is small and simple, so it is much easier to secure than the datacenter behind it.
+We put a small checkpoint between the server and the outside world. We call this the [endpoint](glossary.md). It checks a cryptographic proof that the approved model produced the answer from the exact question it received.
 
 ```text
-                          +---------+
-  user  ---- question --> |  endpoint   | ---- question ---->  AI server
-                          |  (Pi)   |                     (may be hacked)
-        <--- answer ----- |         | <--- answer + proof
-          or "unavailable"+---------+
+user -- question --> endpoint (Pi) -- question --> AI server
+user <-- reply ----- endpoint (Pi) <-- answer + proof --+
+         proven answer or "unavailable"
 ```
 
-We call the Pi running the checking software **the endpoint**.
+The endpoint removes the server's freedom to change the answer's content. Its small, simple design makes it much easier to secure than the datacenter behind it. The server still chooses when to answer and whether to fail.
 
-## What we found
+## Three findings
+
+We tested order, timing and deliberate failures. Ordering rules stopped the code we tried. Fixed release greatly reduced timing signals, at a cost in speed. Failures still carried information; limiting them cost availability.
 
 {{#include results.md:findings}}
 
-These are results for one tiny, deterministic test model and the encoders we tried, not limits on what an attacker could do. Details and numbers are in [What a hacked server can still leak](leakage.md).
+These results use one tiny, deterministic model and the hiding methods we tried. They are not limits on what an attacker could achieve. Read [the leakage explanation](leakage.md) for the mechanisms and [Measurements](results.md) for conditions and evidence.
 
 ## Status
 
+This work was supported by ERA's Frontier AI Security Residency. It is work in progress as of November 2026.
+
 {{#include ../../README.md:status}}
 
-## Where to start
+## Where to go next
 
-- **5 minutes:** this page, then [What a hacked server can still leak](leakage.md).
-- **The whole system with diagrams:** [How the endpoint works](tour.md).
-- **Assessing the security:** [How hard the endpoint is to attack](hardening.md), then the [Attack catalogue](attacks.md) and [Threat model](threat-model.md).
-- **Checking the numbers:** [Measurements](results.md) and [Reproduce the results](reproduce.md).
-- **New to the terms:** the [Glossary](glossary.md).
+- A five-minute introduction: this page and [What a hacked server can still leak](leakage.md).
+- The system and diagrams: [How it works](tour.md).
+- Security assessment: [Hardening](hardening.md), [Attack catalogue](attacks.md) and [Threat model](threat-model.md).
+- Evidence and commands: [Measurements](results.md) and [Reproduce](reproduce.md).
+- Scope and unfamiliar terms: [Limitations](limitations.md) and [Glossary](glossary.md).
 
-The code is at [github.com/0x471/fasr-proof-gated-endpoint](https://github.com/0x471/fasr-proof-gated-endpoint).
+Code: [proof-gated-endpoint](https://github.com/0x471/fasr-proof-gated-endpoint).

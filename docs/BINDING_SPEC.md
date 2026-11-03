@@ -1,8 +1,8 @@
 # Request binding
 
-What the device checks so that a valid proof is a proof for the request the device itself received, and what it releases. Code: `pge/binding.py`, `pge/bundle.py`, `pge/domain.py`, `pge/verdict.py`, `pge/worker.py`. Tests: `tests/`.
+These rules connect a proof to the request the device received and define what it releases. They cover EZKL 23.0.5 and the pinned test bundles, not every EZKL model.
 
-Everything here is for EZKL 23.0.5 and the pinned test bundles. It is not a general claim about every EZKL model.
+Code: `pge/binding.py`, `pge/bundle.py`, `pge/domain.py`, `pge/verdict.py`, `pge/worker.py`. Tests: `tests/`. Read the bundle and encoding rules first, then domain checks, output decoding, verdicts and test vectors.
 
 ## 1. The bundle is pinned
 

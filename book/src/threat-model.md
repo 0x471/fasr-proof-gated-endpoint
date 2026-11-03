@@ -1,11 +1,12 @@
 # Threat model
 
 > **In short**
-> - **What we protect:** the model's weights on the AI server, and everything that decides what gets out: the pinned model files on the endpoint, the endpoint's code and settings, when answers are released, and the endpoint's own logs.
-> - **Who attacks:** mainly the AI server itself (hacked, or a model acting against its owners) working with an outside accomplice who reads the signals; also anyone on the network, and later anyone holding a signing key.
-> - **Key assumption:** every path from the server to the outside goes through the endpoint. Physical attacks on the device are out of scope.
-> - Section 6 lists every way a server can signal around a valid proof and how far each is closed; section 8 maps the threats to MITRE ATLAS.
+> - We protect weights and the endpoint's controls: model files, code, settings, release rules and logs.
+> - The main attacker is the server working with an outside accomplice. Network attackers and signing-key holders also matter.
+> - Every outside route must pass through the endpoint. Physical attacks are outside scope.
 
-This is the full reference document. For a plain overview, read [What a hacked server can still leak](leakage.md) and [How hard the endpoint is to attack](hardening.md) first.
+The server may be hacked or a model acting against its owners. Signing-key attacks apply to later versions. Below, sections 1-5 define assets, attackers, boundaries, assumptions and access. Section 6 lists signals and defences; section 8 maps threats to MITRE ATLAS.
+
+For a plain introduction, read [Leakage](leakage.md) and [Hardening](hardening.md). Terms are in the [glossary](glossary.md).
 
 {{#include ../../docs/THREAT_MODEL.md:2:}}

@@ -1,6 +1,8 @@
 # Attack surface by version
 
-The attacker's view: the attacker controls the AI server and can send anything from inside, and anyone can send anything from outside. For each way in, which software processes the input. The goal is a list that shrinks version by version, down to three pieces of software (network, tracker, verifier). Measured numbers (open ports, package and service counts) live in `book/src/results.md`; this page lists what handles each input.
+The attacker controls the AI server and can send anything from inside. Anyone can also send anything from outside. Each row names an entry point and the software that handles it.
+
+The aim is to reduce that software with each version, down to the network, request tracker and verifier. Open-port, package and service counts live in `book/src/results.md`; this page records which software handles each input.
 
 ## v0: stock Raspberry Pi OS Lite (64-bit), measured 29 Oct 2026
 

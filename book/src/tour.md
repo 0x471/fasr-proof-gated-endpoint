@@ -1,17 +1,19 @@
 # How the endpoint works
 
 > **In short**
-> - The endpoint checks each answer's proof against the question **it** received, never against what the server says the question was.
-> - It sends back either the proven answer or a fixed error, never anything the server wrote, and it decides itself when and in what order answers leave.
-> - This page is the whole system on one page: every part with a diagram, the code that implements it and the evidence behind it. Every number here comes from [Measurements](results.md), which is the reference.
+> - The endpoint checks proofs against the question it received, not the server's account of it.
+> - It writes fresh replies containing proven output or a fixed error, and controls their release.
+> - Network handling, request tracking and proof checking form separate layers. The tables link each to its code and evidence.
 
 ## The pieces
 
-Two machines and two network links. Today the laptop plays both the AI server and the outside observer, and the Pi runs the endpoint. The endpoint listens only on the outside link and dials out to the server itself, so it has no listener for the server to connect to.
+The laptop currently plays both the AI server and the outside observer. The Pi runs the endpoint. It listens on the outside link and connects out to the server, with no server-facing listener.
 
-![The laptop runs the observer and the AI server; the Pi runs the endpoint, one static Rust binary that reads its model files and release policy from a signed store, checks each proof in a limited and sandboxed child process, and writes fixed-word logs](diagrams/architecture.svg)
+![Laptop server and observer connected through the Pi endpoint](diagrams/architecture.svg)
 
-The device runs the Rust endpoint in `endpoint/`, one static binary with no Python and no EZKL command-line tool. The Python endpoint in `pge/` is the reference it is tested against, reply for reply; the function names in the tables below are the Python ones, and the Rust crates mirror them.
+The device runs one static Rust binary, without Python or the EZKL command-line tool. The Python endpoint is its reply-for-reply reference. Code names below are Python names; the Rust crates mirror them.
+
+<details><summary>Code map</summary>
 
 | Piece | Device (Rust) | Reference (Python) | Job |
 |---|---|---|---|
@@ -23,13 +25,22 @@ The device runs the Rust endpoint in `endpoint/`, one static binary with no Pyth
 | Server | `prover/server.py` | | Proves each question with EZKL; can misbehave on purpose (tamper, replay, delay, hide bits) |
 | Observer | `observer/client.py` | | Sends questions, records each reply and its arrival time, decodes hidden bits |
 
-Today both links share one Ethernet cable, so the separation between the server side and the outside side is only by address. A board with a second wired port (planned) makes the two sides physically separate, with nothing forwarded between them.
+</details>
+
+Both links share one Ethernet cable, separated only by address. A second wired port is planned for physical separation, with no forwarding between sides.
 
 ## The life of one question
 
-The server never gets to say what the question was. The endpoint rebuilds that part of the proof itself, so the server only supplies outputs and a proof, and they count only if the proof over the endpoint's question and those outputs verifies.
+The endpoint receives a question, forwards it and accepts only the first server answer for that sequence number. It reconstructs the proof's input from the question it received. Only verified outputs can become a reply.
 
-![Sequence: the user sends a question; the endpoint parses and encodes it; a malformed message closes the connection and an impossible question gets bad_request, neither reaching the server; otherwise the endpoint forwards it, takes the first answer for that sequence number, verifies it in a separate, limited and sandboxed checker process, and replies with the proven y or unavailable](diagrams/question.svg)
+![A question moves through parsing, checking and release](diagrams/question.svg)
+
+- A malformed user frame closes that connection. An impossible question gets `bad_request` without reaching the server.
+- A malformed server frame drops the server link and fails every pending question: it cannot be assigned to just one.
+- The deadline is checked before verification starts and when it finishes. A late check cannot pass.
+- Late, duplicate and unknown answers are counted and dropped. Each question gets one decision.
+
+<details><summary>Steps and tests</summary>
 
 | Step | Code | Evidence |
 |---|---|---|
@@ -39,49 +50,37 @@ The server never gets to say what the question was. The endpoint rebuilds that p
 | Build instances, verify, decide | `_check` | `test_proof_for_another_request_is_blocked` |
 | Decide when the reply leaves | `_release` and `_pump` | [When answers leave](#when-answers-leave) |
 
-- **Malformed frames:** a bad frame from a user closes that user's connection; a bad frame from the server drops the server link and fails every pending question, because a broken message can't be tied to one question.
-- **Deadline:** checked before a check starts and again when the result comes back, so a late result can't slip out.
-- **One decision per question:** late, duplicate and unknown answers from the server are counted and dropped, never sent to a user.
+</details>
 
 ## How a proof is tied to the question
 
-A valid EZKL proof only says "this circuit turned these public input values into these public output values". Binding makes it a proof about **this** question, **this** model and **this** reading of the output, by never taking any of the three from the server.
+A proof says that a circuit transformed particular inputs into particular outputs. [Binding](glossary.md) connects that claim to this question, approved model and interpretation of the output.
 
-![The endpoint encodes the question itself and checks the server's claimed outputs are canonical field elements; together they form the public instances; EZKL verifies the 3,072-byte proof against them with the pinned key, settings and setup file; valid proofs are decoded and released, invalid ones give unavailable](diagrams/binding.svg)
+![The endpoint builds the proof inputs and checks outputs against its pinned model](diagrams/binding.svg)
 
-**The five rules**
+1. Pin one [bundle](glossary.md): `settings.json`, `vk.key` and `kzg.srs`, each identified by SHA-256 and re-checked before verification. The server cannot select another model or key.
+2. Encode the question exactly as EZKL does. A proof for a differently encoded question fails.
+3. Read only verified output values. Never use a separately claimed answer or unbound `pretty_*`, `timestamp` or `hex_proof` fields.
+4. Require exactly 3,072 proof bytes. EZKL otherwise accepts appended bytes, which could carry hidden data.
+5. Refuse impossible questions before forwarding. They would otherwise give anyone a way to force failure. Their input-domain file is trusted configuration, outside the bundle's pinned hashes.
 
-1. **One pinned model.** The endpoint loads one bundle: `settings.json`, the verification key `vk.key` and the setup file `kzg.srs`, each pinned by SHA-256 and re-checked before every verify. The server can't pick another model or key.
-2. **The endpoint encodes the question.** It computes the input values exactly as EZKL does, so a proof made for any other encoded question fails.
-3. **Outputs are read only from verified values.** The server's outputs are released only if the proof over the endpoint's inputs and those exact outputs verifies. The endpoint never uses an answer the server states, and never reads the proof file's unbound fields (`pretty_*`, `timestamp`, `hex_proof`).
-4. **The proof length is pinned.** EZKL accepts a valid proof with extra bytes appended, which would be a free channel, so any length other than 3,072 bytes is rejected.
-5. **Impossible questions are refused up front.** A question that would overflow EZKL's range checks can't be proved, so it gets `bad_request` before it reaches the server; otherwise anyone could make the server fail on demand. The limits come from a domain file, which is trusted configuration: it is not among the bundle's pinned hashes.
+The [binding reference](binding-spec.md) records the pitfalls: unpinned output scales, incompatible Python rounding, server-supplied answers, padded proofs and impossible inputs. It also keeps the [worked numerical example](binding-spec.md#7-test-vectors) and exact encoding rules.
 
-**What went wrong without each rule**
+Binding covers the encoded value, not raw input identity. Different raw values can encode identically. Proofs have no nonce: duplicate delivery is blocked, but an old proof can answer a new, identically encoded question.
 
-| Pitfall | What happened | Rule |
-|---|---|---|
-| Settings not pinned | Changing only the output scale from 26 to 13 kept the proof valid but decoded 0.9666 as 7918.6 | 1 |
-| Python rounding | Python's `round()` rounds half to even: 2.5/8192 encodes as 2, EZKL gives 3 | 2 |
-| Server-supplied answer | The server could state any answer next to a valid proof | 3 |
-| Padded proofs | EZKL still accepts a valid proof with bytes appended | 4 |
-| Out-of-domain questions | A question no proof can exist for makes the server fail on demand | 5 |
+For this deterministic model, replay gives no output choice. It does not prove fresh computation.
 
-**Worked example** (the tiny test model, y = ReLU(xW + b), 4 inputs and 3 outputs): x = [0.5, -0.2, 0.9, 0.1] encodes to inputs [4096, -1638, 7373, 819] at scale 13; the proven outputs are [64869479, 0, 0] at scale 26, which decode to y = [0.9666305631399155, 0, 0].
-
-**Limits**
-
-- It binds the **encoded** value, not the raw number: 0.5 and 0.50001 both encode to 4096, so one proof serves both.
-- **Replay:** the proof has no nonce. The endpoint answers each pending question once and drops duplicates, so nothing is delivered twice, but an old proof for the same encoded question still verifies for a new request. For one deterministic model that gives the server no choice of output; it isn't proof of fresh computation.
-- The rules are specific to [EZKL](https://github.com/zkonduit/ezkl) 23.0.5 and these test models. The test model is tiny (4 inputs, 3 outputs) and deterministic because the research question is about the endpoint, not the prover. A production proof system would take the same place in the design, but it needs its own binding rules (what exactly the proof states, how inputs and outputs are encoded, any randomness) and its own review.
-
-Full rules and test vectors: [Request binding specification](binding-spec.md).
+The toy model is y = ReLU(xW + b), with 4 inputs and 3 outputs. It is small and deterministic because we study the endpoint, not the prover. A production prover can occupy the same place, but needs new binding rules and review, including encoding and randomness. Our rules cover EZKL 23.0.5 and these test models only.
 
 ## The checker
 
-The cryptography is EZKL's verifier (23.0.5), compiled into the endpoint as a library. The endpoint has to trust its verdict, since it can't tell if the verifier wrongly says yes, but it contains the verifier's failures: each check runs in a fresh, short-lived child process (the same binary started with `--verify-child`), boxed in by limits, whose only way to say yes is a strict exit code and one word.
+EZKL's verifier is compiled into the Rust binary as a library. Each check starts a fresh child of that binary with `--verify-child`. A child is a separate process whose crash, runaway allocation or hang can be contained.
 
-![The endpoint starts a fresh child of the same binary with a minimal environment and sends it the model files and the proof on a pipe; the child lowers its resource limits, installs a system-call allow-list, verifies with EZKL's library and answers with one word, capped at 64 KiB; a watchdog kills the whole process group at the deadline](diagrams/checker.svg)
+![A short-lived checker receives files and a proof through a pipe under resource and system-call limits](diagrams/checker.svg)
+
+The child gets a minimal environment. It reads model files and the proof from a pipe, re-checks their hashes and needs no file access. After lowering its limits, it installs a Linux system-call allow-list.
+
+<details><summary>Every checker limit</summary>
 
 | Limit | Value | Why |
 |---|---|---|
@@ -95,20 +94,19 @@ The cryptography is EZKL's verifier (23.0.5), compiled into the endpoint as a li
 | Output | 64 KiB, then SIGKILL | A flooding child can't exhaust the endpoint |
 | Wall time | the time left until the deadline | Then SIGKILL of the whole process group |
 
-- **Why a child process:** a crash, a runaway allocation or a hang in the verifier ends only that child. The child reads the model files and the proof from its pipe and re-checks the files' hashes, so it needs no file access at all.
-- **Verdicts:** ACCEPT needs exit 0 and exactly `accept`; REJECT needs exit 1 and exactly `reject`; anything else, including a killed child, is ERROR. Only ACCEPT releases an answer, and ERROR counts as a server failure, never as a pass.
-- **Memory:** {{#include results.md:memory}}
-- **What it isn't:** a check of the verifier's correctness. A bug that makes it say ACCEPT for a bad proof is not contained; the allow-list only stops a taken-over checker from reaching anything outside itself.
+</details>
 
-The Python reference endpoint does the same with EZKL's command-line tool instead of the library.
+ACCEPT requires exit 0 and exactly `accept`; REJECT requires exit 1 and exactly `reject`. Anything else is ERROR, including a killed child. Only ACCEPT releases output. ERROR counts as server failure.
 
-**What a check costs on the Pi** (medians of 20, 19 October):
+The watchdog kills the whole process group at the deadline. These controls do not establish verifier correctness: a false ACCEPT still passes. The allow-list contains a taken-over checker, not a wrong cryptographic verdict.
 
-{{#include results.md:verify-cost}}
+The Python reference uses EZKL's command-line tool instead. [Measurements](results.md#checking-one-proof) gives its memory-limit reliability and the full cost breakdown. The Rust timings are [recorded separately](results.md#the-rust-endpoint-on-the-pi-29-oct).
 
 ## The message format
 
-Every message is a 4-byte length followed by its payload. Questions and replies have one fixed size for the pinned model, and an answer is a fixed part plus a proof that must have the pinned length, so nothing about a reply's size is the server's choice and a parser only has to accept one shape.
+A frame is a 4-byte length followed by its payload. Questions and replies have fixed sizes for the pinned model. Server answers add a proof of exactly the pinned length.
+
+<details><summary>Wire layout for the test model</summary>
 
 | Message | From, to | Payload (test model) | Contents |
 |---|---|---|---|
@@ -117,41 +115,40 @@ Every message is a 4-byte length followed by its payload. Questions and replies 
 | Answer | server to endpoint | 105 bytes + proof | type 3, seq, 3 output field elements of 32 bytes, then the proof (up to 64 KiB on the wire, must be exactly 3,072 bytes) |
 | Reply | endpoint to user | 34 bytes (38 with the length), success or error alike | type 4, id, status (0 ok, 1 bad_request, 2 unavailable), 3 float64 outputs (all zero unless ok) |
 
-- **Rejected:** a frame of the wrong size, an unknown type byte, an id or seq of 2^53 or more, a NaN or infinite number, a frame that doesn't arrive in full within the deadline, and ids that don't strictly increase on one connection.
-- **Tested by:** a fuzz test of 10,500 random and mutated messages per parser (each must be refused, or re-encode to exactly the same bytes), frames split at random points, and boundary tests (a 65,536-byte proof field accepted, 65,537 refused).
+</details>
 
-Details: [Endpoint service specification](service-spec.md).
+The parser rejects wrong lengths, unknown types, non-finite numbers and ids or sequence numbers at least 2^53. Frames must arrive fully within the deadline, and ids must strictly increase on each connection.
+
+Tests try 10,500 random and mutated messages per parser. Accepted messages must re-encode identically. Other tests split frames at random points and check the proof-field boundary: 65,536 bytes accepted, 65,537 refused. The [service specification](service-spec.md) gives the exact rules.
 
 ## When answers leave
 
-Once the proof fixes what an answer says, the server's remaining levers are when and in what order replies leave, so the endpoint decides that itself. Every admitted question goes through the same states; the release rule only changes when a decided answer leaves.
+Each question moves through pending, checking and decided states. Release rules determine when a decided answer leaves.
 
-![States of one question: pending, checking, decided; then sent straight away under the immediate rule, or held until every earlier answer is sent (and, under the fixed rule, until its own deadline); a halt sends held answers as unavailable](diagrams/lifecycle.svg)
+![One question's states and release rules](diagrams/lifecycle.svg)
 
-| Rule | When an answer leaves | Stops | Costs |
-|---|---|---|---|
-| Immediate (v0) | as soon as it is decided | nothing | nothing |
-| Arrival (v1 default) | after every earlier question's answer | the server choosing the order | a slow answer holds up the ones behind it, up to its deadline |
-| Fixed | in arrival order, and not before admission + deadline (4 s in the tests) | order, and the timing codes we tried | every answer waits the whole budget; a check not done by then is `unavailable` |
-| Fixed + spin 5 ms | as fixed, but the timer wakes 5 ms early and busy-waits until the release time | no average sub-millisecond shift was detected; whether a weaker trace remains is not settled | a little CPU; no callback blocks the loop for more than the spin (K35) |
-
-- **Halt** (`--halt-after N`, off by default): after N server-caused failures the endpoint stops every successful answer: pending and held ones become `unavailable`, and so do later requests. Error replies keep flowing. It caps damage but lets the server switch the endpoint off, and where the halting failure fell, and the timing of the errors, still leak.
-- **Capacity:** at most `max_pending` (default 32) admitted questions wait at once, held answers included; beyond that the endpoint answers `unavailable` straight away.
-
-Bugs found by review in this part, all fixed with tests that fail on the old code:
-
-| Row | Bug | Fix |
+| Rule | Release | Cost or limit |
 |---|---|---|
-| K30 | A held success could leave after a halt, or after its own deadline | re-checked when it leaves |
-| K31 | Held answers didn't count towards `max_pending`, so the queue could grow without bound | counted |
-| K33 | With spin, a later answer could overtake an earlier one, letting the server order two error replies | one ordered queue; only the next answer may spin |
-| K35 | With spin, a disconnect or halt that decided many answers at once chained one busy-wait per answer, stalling the endpoint for tens of ms | releases only schedule the pump, which busy-waits at most once per run |
+| Immediate, v0 | As soon as decided | Stops none of the signals |
+| Arrival, v1 binary default | After every earlier question's reply | A slow answer delays those behind it, up to its deadline |
+| Fixed | Arrival order, never before admission + deadline; tests use 4 s | Every answer waits the budget; unfinished checks become `unavailable` |
+| Fixed with 5 ms spin | Wake 5 ms early, busy-wait until release | Some CPU cost; each loop callback blocks for at most the spin |
+
+Arrival order removes the server's choice of order. Fixed release also stopped the timing codes tried. Spin showed no average sub-millisecond shift; whether a weaker trace remains is unresolved. See [the leakage evidence](leakage.md).
+
+At most `max_pending` (default 32) questions can wait, including held replies. Excess questions get `unavailable` immediately.
+
+Halt is optional and off by default (`--halt-after N`). After N server-caused failures, held, pending and future replies become `unavailable`. Errors keep flowing: halting gives the server an off switch, and its position and error timing still leak.
+
+[Review found release bugs](hardening.md#bugs-found-by-review), all fixed with regression tests: late successes after halt or deadline, uncounted held answers, spin reordering and chained busy-waits.
 
 ## From v0 to v2
 
-The same endpoint is built three times, each version removing a way in, and measured the same way each time. v0 and v1 are measured on the Pi; v2 is planned.
+Each version removes ways into the device and is measured the same way. v0 and v1 have Pi measurements; v2 is planned.
 
-![v0 baseline: stock Raspberry Pi OS with the Python endpoint and the EZKL CLI, ssh and mDNS listening; v1 stripped: a Buildroot image with one static Rust endpoint, read-only, one open port behind a firewall, signed updates, no login; v2 locked: secure boot, two physical ports, a TPM counter and signed images](diagrams/ladder.svg)
+![Versions from stock software to the planned secure-boot device](diagrams/ladder.svg)
+
+<details><summary>Versions and components</summary>
 
 |  | v0 (measured) | v1 (measured) | v2 (planned) |
 |---|---|---|---|
@@ -161,72 +158,56 @@ The same endpoint is built three times, each version removing a way in, and meas
 | Updates | copy files over ssh | signed model and policy in a store on a data partition; a new update comes as a new image or is applied to the card offline | as v1, plus a counter that can't roll back |
 | Login | ssh, HDMI, serial | none (from the 2 Nov rebuild; until then a console login) | none |
 
-What each one exposes, measured:
+</details>
 
-{{#include results.md:attack-surface}}
+### Building v1
 
-- **How the v1 image is built** (`image/build.sh`, on a Linux VM because Buildroot doesn't build on macOS): download the Buildroot release and check its SHA-256, start from `raspberrypi4_64_defconfig`, add the static endpoint, the firewall and a fixed address (`image/v1.fragment`), apply the signed update into the store exactly as the device would, and check that every added option, kernel option included, survived the build.
-- **The 2 Nov rebuild** adds a locked-down kernel (no kernel modules on the image and module loading switched off at boot, kernel lockdown, no raw memory, debugger or tracing interfaces, no IPv6, radios, sound or USB; `image/kernel.fragment`) and removes every login prompt. On the Pi (2 Nov) it booted with both start-up checks passing and only port 8700 reachable ([Measurements](results.md)).
-- **Built twice:** the 2 Nov image was also built on a clean GitHub runner and compared file by file: the user space matched except for build metadata. The v1.1 build is reproducible: the laptop and two CI builds produce the same files, kernel included, apart from those that depend on the signing key ([Measurements](results.md)).
-- **What v1 still lacks:** the second port, and a way to deliver an update on the device itself.
+`image/build.sh` runs in a Linux VM because Buildroot does not build on macOS. It:
 
-**Secure boot (v2, planned):**
+- Downloads Buildroot and verifies its SHA-256.
+- Starts from `raspberrypi4_64_defconfig`.
+- Adds the static endpoint, firewall and fixed address through `image/v1.fragment`.
+- Applies the signed update to the store as the device would.
+- Checks that every added option, including kernel options, survived the build.
 
-![The hash of our public key is burned once into the chip's one-time-programmable memory; the boot ROM and EEPROM bootloader check the signature of the boot image holding the kernel, system and endpoint; a valid image boots, a modified or unsigned one doesn't](diagrams/secure-boot.svg)
+The 2 Nov rebuild removes login prompts and [locks down the kernel](hardening.md#5-reach-the-operating-system). It booted with both start-up checks passing and only port 8700 reachable.
 
-- The key hash in the chip is **permanent**, so this is done on a spare Pi, not the development one.
-- Updates: versioned packages signed with update keys (in the style of The Update Framework), a rule that refuses an older version, and an install that survives power loss at every step. Boot signing, update signing and model approval use separate keys.
-- **Known gap:** the Pi has no battery-backed clock, so after a reboot it can't tell how old its version is, and an attacker who blocks updates can keep it on an old one.
-- This part is planned from Raspberry Pi's documentation; nothing about secure boot has been run yet.
+A clean-runner build matched user-space files apart from build metadata. v1.1 is reproducible across the laptop and two CI builds, including the kernel, except for signing-key-dependent files. [Measurements](results.md#attack-surface) keeps the comparisons and distinguishes built from boot-tested images.
 
-More: [How hard the endpoint is to attack](hardening.md).
+v1 still lacks a second physical port and on-device update delivery.
+
+### Secure boot: v2, planned
+
+![A permanent chip key hash authorises signed boot images](diagrams/secure-boot.svg)
+
+The key hash is permanent, so secure boot needs a spare Pi, not the development board. The boot ROM and EEPROM bootloader check an image containing the kernel, system and endpoint. Modified or unsigned images should not boot under this design.
+
+Versioned packages use update keys, forward-only version checks and installation that survives power loss at every step, following The Update Framework's approach. Boot signing, update signing and model approval use separate keys.
+
+The Pi lacks a battery-backed clock. After reboot, it cannot know its version's age; blocking updates can therefore keep it on an old version. This design follows Raspberry Pi documentation. No secure-boot experiment has run.
 
 ## Who attacks it
 
-The main attacker is the AI server itself (hacked, or a model working against its owners) together with an accomplice outside who reads the signals. The endpoint's job is to give that pair as little to work with as possible.
+The main attacker is a hacked AI server or a model acting against its owners, paired with an outside observer. Network attackers and holders of signing keys also matter.
 
-![Inside and untrusted: A1 a hacked server and A2 a patient rogue model, both sending to the endpoint, the only trusted part; outside: A3 an accomplice reading replies; also A4 a network attacker on either link and A5 a holder of a signing key from v2](diagrams/threats.svg)
+![Server, outside accomplice, network attacker and signing-key holder around the trusted endpoint](diagrams/threats.svg)
 
-- **Protected:** the weights on the server, and everything that decides what gets out: the pinned bundle, the endpoint's code and settings, when replies are released, and the endpoint's own logs.
-- **Assumed:** every path from the server to the outside goes through the endpoint (not yet enforced on v0); the proof system is sound; physical attacks are out of scope.
+We protect the weights and the controls on released information: model bundle, endpoint code and settings, release rules and logs. Every outside route is assumed to cross the endpoint; v0 does not enforce this. We assume sound proofs and exclude physical attacks.
 
-Signals the server controls even with valid proofs:
+The [threat model](threat-model.md) lists each signal and its status. [Hardening](hardening.md) covers logs and access controls; [Leakage](leakage.md) covers timing, failures, ordering, queue pressure and packet limits.
 
-| Signal | Defence | Status |
-|---|---|---|
-| What an answer says | proof + binding | blocked for the test model |
-| Order of replies | arrival-order release | the ordering code we tried no longer gets through (one connection) |
-| Timing | fixed release time, plus spin | much reduced; see below |
-| Which answers fail | a cap on failures per window (Rust endpoint) | reduced at a cost in availability; measured on the Pi against stopping at the first failure |
-| Reply size | fixed-size replies | blocked at the message level; packet-level details on the outside link not measured |
-| Logs | fixed words only; no more records for late, repeated or unasked-for answers than questions asked (K51) | the number and timing of events still follow the server |
-| Keeping the endpoint busy | fixed release: each question keeps its place until its release time | under fixed release, which users get `unavailable` for a full queue doesn't depend on the server (state-machine test, K17); open in arrival order; whether timed load moves releases (K34) is not measured yet |
-
-{{#include ../../docs/ATTACKS.md:summary}} Every row is in the [Attack catalogue](attacks.md); the full model is in [Threat model](threat-model.md).
+{{#include ../../docs/ATTACKS.md:summary}}
 
 ## Measuring what still leaks
 
-We made the server hide a known message in its behaviour and had an outside observer try to read it back. If the observer recovers the planted bits, that channel is open; if a fixed decoder fails, it didn't recover that message in that run (a smarter one might still).
+We plant bits in server behaviour, then compare them with an outside observer's decoding. Failure to recover a message does not rule out a smarter decoder.
 
-![Planted bits, seeded at random, drive a server encoder that delays, reorders or fails answers on purpose; answers with valid proofs pass the endpoint under one release rule; the observer records each reply and its arrival time; a decoder reads the bits back and they are compared with the planted bits, with an honest server as the control](diagrams/leakage.svg)
+![Planted bits pass through a server encoder, endpoint policy and outside decoder, with an honest control](diagrams/leakage.svg)
 
-**Three encoders** (`prover/server.py`):
+| Encoder in `prover/server.py` | Method |
+|---|---|
+| `timing_bits` | Delay an answer by 1 s for each one bit |
+| `order_bits` | Order 3 concurrent answers; the permutation index carries 2 bits |
+| `fail_position` | Tamper one output per block of 16; its position carries 4 bits |
 
-- `timing_bits`: delay an answer by 1 s for each 1 bit.
-- `order_bits`: take 3 questions at once and answer them in an order whose permutation index carries 2 bits.
-- `fail_position`: in each block of 16 answers, make exactly one fail (a tampered output); its position carries 4 bits.
-
-**The statistics in plain words:**
-
-- **Permutation test:** shuffle the planted labels thousands of times and see how often a difference as big as the real one appears by chance. That fraction is the p-value.
-- **Held-out decoder:** fit a simple threshold on half the answers and score it on the other half, both ways round, so the decoder never sees the answers it's scored on. Its null refits the decoder on shuffled labels each time.
-- **Mutual information:** how many bits per answer the binned arrival time tells about the hidden bit, with a shuffled-label baseline. It describes this one statistic, not a limit on what leaks.
-- **Honest control:** the same analysis on a run where the server hides nothing; any "signal" there is noise.
-
-**Results on the Pi** (19 October, 4 s budget, one client at a time, 16 bits per cell):
-
-{{#include results.md:matrix}}
-
-**The leftover timing trace.** {{#include results.md:no-spin-trace}} The spin was re-tested on 20 October under a protocol written before the data (`docs/EXPERIMENT_PROTOCOL.md`; 512 answers, the corrected spin code, microsecond timestamps). {{#include results.md:spin-verdict}}
-
-**What it doesn't show:** a limit on what a cleverer attacker could do, several clients at once, or packet-level signals. All numbers and caveats: [Measurements](results.md) and [What a hacked server can still leak](leakage.md).
+The [glossary](glossary.md) explains permutation tests, held-out decoding, mutual information and honest controls. [Measurements](results.md) records every result, run condition and statistical caveat.

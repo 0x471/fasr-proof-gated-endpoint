@@ -1,82 +1,99 @@
 # Repository map
 
-## The device's endpoint (`endpoint/`, Rust)
+Start with the directory table. Expand a section to find a specific implementation or experiment.
 
-| Path | What it does |
+| Directory | Purpose |
 |---|---|
-| `endpoint/wire` | The message format: parse, then re-encode and compare, so every message has one accepted form; no unsafe code; two bounded Kani proofs (the frame length check, and any 12-byte input for the smallest model shape; larger inputs did not finish) |
-| `endpoint/core` | The release rules, halt and failure cap as a deterministic state machine; the caller supplies time and events |
-| `endpoint/verify` | Binding (encodes the question like EZKL) and the pinned bundle, re-hashed for every check |
-| `endpoint/update` | Signed updates: the key list, the manifest, the forward-only state; `pge-sign` makes signatures off the device |
-| `endpoint/endpoint` | The binary: one poll loop owning the sockets, timers and log; each proof checked in a fresh child process with resource limits and a system-call filter |
-| `endpoint/fuzz` | cargo-fuzz targets: the message format, the checker's input, the update files and the forward-only rule (`seeds.py` writes their seed inputs) |
-| `endpoint/sources.toml`, `endpoint/prepare.sh` | EZKL and other upstream sources pinned by commit, checked out before every build |
+| `endpoint/` | Rust software running on the device |
+| `pge/` | Python reference, compared reply for reply |
+| `prover/`, `observer/` | Simulated server, outside client and leakage analysis |
+| `device/`, `image/` | Pi experiments and the stripped system image |
+| `tests/` | Automated checks and pinned models |
+| `docs/`, `book/` | Specifications, evidence and this explanation |
+| `.github/workflows/`, `spike/` | CI and side experiments |
 
-## The reference endpoint (`pge/`, Python)
+<details><summary>Device software: Rust</summary>
 
-| File | What it does |
+| Path | Purpose |
 |---|---|
-| `pge/service.py` | The endpoint service: one approved model, at most one answer per question, three release rules (arrival order by default, immediate as in v0, fixed time); replies are the proven output or one fixed error; logs use fixed words only |
-| `pge/protocol.py` | The message format: fixed-size binary messages for the approved model, parsed strictly |
-| `pge/binding.py` | Encodes the question exactly as EZKL does, checks the server's output values, decodes proven outputs |
-| `pge/bundle.py` | Loads the model's files only if each matches its pinned hash |
-| `pge/domain.py` | The range of questions the test model can answer, so impossible ones are refused up front |
-| `pge/verdict.py` | Turns a proof check into ACCEPT, REJECT or ERROR |
-| `pge/cli.py` | Checks proofs with EZKL's official command-line tool, under resource limits |
-| `pge/proc.py` | Runs a program with a deadline, an output cap and resource limits |
-| `pge/worker.py` | Runs one check in a separate process with a deadline (Python version) |
+| `endpoint/wire` | Strict parse/re-encode comparison; no unsafe code. Two bounded Kani proofs cover frame-length checking and any 12-byte input for the smallest shape. Larger inputs did not finish. |
+| `endpoint/core` | Deterministic release, halt and cap state machine; caller supplies time and events. |
+| `endpoint/verify` | EZKL-compatible input encoding; pinned bundle re-hashed per check. |
+| `endpoint/update` | Signed key lists, manifests and forward-only state. `pge-sign` signs off-device. |
+| `endpoint/endpoint` | One poll loop owns sockets, timers and logs; fresh limited, syscall-filtered child per proof. |
+| `endpoint/fuzz` | cargo-fuzz targets for messages, checker input, update files and forward-only state. `seeds.py` supplies seeds. |
+| `endpoint/sources.toml`, `endpoint/prepare.sh` | Commit-pinned upstream sources, checked out before each build. |
 
-## Documents (`docs/`)
+</details>
 
-| File | What it covers |
+<details><summary>Python reference</summary>
+
+| Path in `pge/` | Purpose |
 |---|---|
-| `docs/THREAT_MODEL.md` | Assets, attackers, trust boundaries, assumptions, attack surface, side channels and their status, the MITRE ATLAS mapping |
-| `docs/ATTACKS.md` | Every catalogued scenario, its result and its evidence |
-| `docs/SERVICE_SPEC.md` | The endpoint service's exact behaviour |
-| `docs/BINDING_SPEC.md` | The request-binding rules, pitfalls and test vectors |
-| `docs/UPDATE_SPEC.md` | Signed updates: who signs what, file formats, the rollback and replay rules |
-| `docs/ATTACK_SURFACE.md` | Every way in, version by version, and the machines that build the device's software |
-| `docs/EXPERIMENT_PROTOCOL.md` | The spin repeat's protocol, written before the data |
-| `docs/EXPERIMENT_PROTOCOL_2.md` | Protocols 2-5 (the timing residue's cause, cap versus halt, load, several clients) and the packet captures, written before the data |
-| `docs/results/` | Complete analysis output for registered experiments |
+| `service.py` | One model, at most one reply per question; arrival default, immediate v0 or fixed release; proven output/fixed errors and fixed-word logs. |
+| `protocol.py` | Strict fixed-size binary messages for the model. |
+| `binding.py` | Encode inputs as EZKL does, validate output values, decode proven outputs. |
+| `bundle.py` | Load model files only when hashes match. |
+| `domain.py` | Refuse questions outside the model's input range. |
+| `verdict.py` | ACCEPT, REJECT or ERROR classification. |
+| `cli.py` | Limited proof checks through EZKL's official CLI. |
+| `proc.py` | Program deadline, output cap and resource limits. |
+| `worker.py` | One proof check in a separate process with a deadline. |
 
-## Tests and experiments
+</details>
 
-| Path | What it is |
+<details><summary>Specifications and records</summary>
+
+| Path in `docs/` | Purpose |
 |---|---|
-| `tests/` | Unit tests, comparisons against EZKL's own encoding, end-to-end checks, a parser fuzz test, service tests including the leakage encoders, and `test_docs.py`, which fails when a fact copied between pages drifts from its home |
-| `tests/fixtures/` | Two pinned test models: `tiny` (4 inputs, 3 outputs, with its input range in `domain.json`) and `multi` (two inputs, two outputs) |
-| `prover/server.py` | The laptop AI server: honest, or misbehaving in one of several ways, including hiding bits in timing, order or failures |
-| `observer/client.py` | The outside observer: sends questions (one at a time, in batches, from several connections, or at a fixed pace), records each answer and its time, decodes hidden bits |
-| `observer/by_admission.py` | Puts a several-client trace in the order the endpoint admitted the questions |
-| `observer/pcap_trace.py` | Answer times and packet details from a capture of the outside link |
-| `observer/cap_model.py`, `observer/cap_bound.py`, `observer/cap_check.py` | The failure cap: its reference model, the bound on what the failure pattern can carry, and a reply-by-reply check of a run against the model |
-| `observer/sleep_vs_fixed.py` | The random-sleep model compared with fixed release |
-| `observer/analyze_matrix.py` | Summarises a release-rule experiment |
-| `observer/jitter_test.py` | Tests whether leftover timing differences follow the server's hidden bits |
-| `observer/estimate.py` | Estimates leakage as mutual information (bits per answer), with a null and an interval; `--selftest` checks it on synthetic channels |
-| `observer/order_experiment.py` | The ordering experiment on one machine |
+| `THREAT_MODEL.md` | Assets, attackers, boundaries, assumptions, attack surface, channel status and MITRE ATLAS mapping. |
+| `ATTACKS.md` | Every catalogued scenario, result and evidence. |
+| `SERVICE_SPEC.md` | Exact service behaviour. |
+| `BINDING_SPEC.md` | Request binding, pitfalls and test vectors. |
+| `UPDATE_SPEC.md` | Signers, formats, rollback and replay rules. |
+| `ATTACK_SURFACE.md` | Access by version, including build machines. |
+| `EXPERIMENT_PROTOCOL.md` | Spin-repeat protocol, written before data. |
+| `EXPERIMENT_PROTOCOL_2.md` | Pre-registered protocols 2-5: timing cause, cap/halt, load, clients and packet captures. |
+| `results/` | Complete registered-experiment analysis. |
 
-## Running on the Pi (`device/`)
+</details>
 
-| File | What it does |
+<details><summary>Tests, server and observer</summary>
+
+| Path | Purpose |
 |---|---|
-| `device/verify_on_pi.sh`, `device/check_verifier.sh` | Copy the pinned model to the Pi and check accept and reject cases with the real tool, timed |
-| `device/pi_scenario.sh` | One experiment on the stock system: the endpoint (Python or Rust) on the Pi, the server and observer on this machine |
-| `device/image_scenario.sh` | One experiment against the v1 image, which has no login: the endpoint already runs; writes a manifest per run |
-| `device/tcp_scan.py` | Connect scan of every TCP port: open, refused or dropped |
-| `device/rust_verify_cost.py`, `device/endpoint_latency.py` | What one Rust check costs, and what the endpoint itself adds to each answer |
-| `device/pi_matrix.sh` | Every release rule against every signalling method |
-| `device/verify_cost.py` | What one check costs on the Pi, and how reliable each memory limit is |
-| `device/measure.sh` | Snapshot of the device's attack surface: packages, services, processes, open ports, file hashes |
+| `tests/` | Unit, EZKL encoding, end-to-end, parser-fuzz, service and leakage tests. `test_docs.py` checks copied facts for drift. |
+| `tests/fixtures/` | Pinned `tiny`: 4 inputs, 3 outputs, range in `domain.json`; `multi`: two inputs and two outputs. |
+| `prover/server.py` | Honest or misbehaving server, including timing, order and failure encoders. |
+| `observer/client.py` | Sequential, batched, multi-connection or paced questions; reply/time records and decoding. |
+| `observer/by_admission.py` | Order multi-client traces by admission. |
+| `observer/pcap_trace.py` | Extract outside packet details and reply times. |
+| `observer/cap_model.py`, `observer/cap_bound.py`, `observer/cap_check.py` | Cap reference, failure-pattern bound and reply-by-reply comparison. |
+| `observer/sleep_vs_fixed.py` | Compare random-sleep and fixed-release models. |
+| `observer/analyze_matrix.py` | Summarise release-rule experiments. |
+| `observer/jitter_test.py` | Test whether remaining timing follows planted bits. |
+| `observer/estimate.py` | Mutual information in bits per answer, null and interval; synthetic `--selftest`. |
+| `observer/order_experiment.py` | Local ordering experiment. |
 
-## Other
+</details>
 
-| Path | What it is |
+<details><summary>Pi scripts, images and supporting files</summary>
+
+| Path | Purpose |
 |---|---|
-| `image/` | Builds the v1 system with Buildroot (`build.sh`, the option fragments, the overlay with the firewall and start-up checks), signed updates for it (`make_update.sh`), and a file-by-file listing of a built image (`manifest.sh`) |
-| `.github/workflows/` | CI: Python tests, the Rust endpoint (native and static aarch64), the book, the spikes, and a second build of the image on demand |
-| `book/` | This book (mdBook); the reference pages include the files in `docs/` |
-| `book/diagrams/`, `book/render-diagrams.sh` | Diagram sources (Mermaid) and the script that renders them to `book/src/diagrams/*.svg`; mdBook has no Mermaid support, so the SVGs are committed |
-| `spike/rust-verifier/` | Side experiment: EZKL's checker as a small Rust program |
-| `spike/stwo-verifier/` | Side experiment: a pinned checker for S-two (StarkWare) proofs |
+| `device/verify_on_pi.sh`, `device/check_verifier.sh` | Copy pinned model; time real-tool acceptance and rejection checks. |
+| `device/pi_scenario.sh` | Stock-system experiment: Python or Rust on Pi; server and observer on laptop. |
+| `device/image_scenario.sh` | Run against the already-started, login-free image endpoint; record manifest. |
+| `device/tcp_scan.py` | Scan every TCP port: open, refused or dropped. |
+| `device/rust_verify_cost.py`, `device/endpoint_latency.py` | Rust checker cost and endpoint overhead. |
+| `device/pi_matrix.sh` | Every release rule against each signalling method. |
+| `device/verify_cost.py` | Verification cost and memory-cap reliability. |
+| `device/measure.sh` | Packages, services, processes, open ports and file hashes. |
+| `image/` | Buildroot `build.sh`, fragments, firewall/start-up overlay; signed `make_update.sh`; file inventory via `manifest.sh`. |
+| `.github/workflows/` | Python, native/static-aarch64 Rust, book, spikes and on-demand independent image build. |
+| `book/` | mdBook, including reference files from `docs/`. |
+| `book/diagrams/`, `book/render-diagrams.sh` | Mermaid sources rendered to committed SVGs in `book/src/diagrams/`; mdBook has no Mermaid support. |
+| `spike/rust-verifier/` | Small Rust EZKL checker experiment. |
+| `spike/stwo-verifier/` | Pinned S-two (StarkWare) checker experiment. |
+
+</details>

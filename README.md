@@ -1,14 +1,8 @@
 # Proof-gated endpoint
 
-A small device that lets an AI server's answers out only if each one carries a valid cryptographic proof that the approved model produced it. This repository has the device's software, its threat model, every attack tried against it, and the measurements.
+A Raspberry Pi checks cryptographic proofs before releasing an AI server's answers. The repository contains its software, threat model, attack catalogue and measurements.
 
-This work was supported by ERA's Frontier AI Security Residency (October to December 2026).
-
-> Work in progress. Nothing here is production security. Every claim is limited to what the named test or measurement shows.
-
-## The idea
-
-A hacked AI server, or a model acting against its owners, could try to smuggle the model's weights out inside ordinary answers. Put a checkpoint between the server and the outside world: a Raspberry Pi (the **endpoint**) that checks a proof for every answer and blocks anything that doesn't check out.
+A hacked server or rogue model could hide stolen model weights in answers. The endpoint requires proof that the approved model produced each answer from the user's question. Proofs fix content; timing, order and deliberate failures can still carry data.
 
 ```mermaid
 flowchart LR
@@ -18,22 +12,24 @@ flowchart LR
     G -->|proven answer, or one fixed error| U
 ```
 
-A valid proof stops the server from changing **what** an answer says. It doesn't stop it from signalling through **when** answers leave, **in what order**, or **which ones fail**. Measuring and closing those signals is the other half of the project.
+Work in progress, supported by ERA's Frontier AI Security Residency, October to December 2026. This is not production security. Claims extend only as far as their named tests or measurements.
 
-## What we found
+## Findings
 
 <!-- BEGIN findings: copied from book/src/results.md; tests/test_docs.py fails if they differ -->
-| Way to smuggle data out | Basic endpoint | Best endpoint so far | What it costs |
+| Signal | Basic endpoint | Best result so far | Cost |
 |---|---|---|---|
-| Change what an answer says | Blocked by the proof | Blocked | Each check takes about 0.24 s on the Pi |
-| Reorder answers | Leaks | **The ordering code we tried no longer gets through**: answers leave in the order questions arrived | A slow answer delays the ones behind it |
-| Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive on the stock system and found nothing on the stripped image (one run) | Answers take 4.0 s instead of about 0.8 s |
-| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 8 of 32 planted bits got out instead of 32/32; stopping at the first failure got nothing readable out (pre-registered, 2 Nov) | with the cap, 54 of 128 answers ok instead of 120 while the server keeps failing (an honest server loses none); stopping answers nothing after the first failure |
+| Changed answer content | Blocked by proof | Blocked | About 0.24 s per check on the Pi |
+| Reply order | Leaks | Tested ordering code blocked: replies follow question order | A slow reply delays later ones |
+| Reply timing | Leaks | Much reduced. Fixed release prevents early replies; a small trace remained without spin. With spin, a 512-answer test was inconclusive on stock OS and found nothing on the stripped image, one run | 4.0 s per answer instead of about 0.8 s |
+| Chosen failures | Leaks | Cap: 8 of 32 planted bits recovered instead of 32/32. Stopping at the first failure released nothing readable; pre-registered, 2 Nov | Cap: 54 of 128 answers ok instead of 120 during continued failures; an honest server loses none. Stopping answers nothing after the first failure |
 <!-- END findings -->
 
-Measured on a real Raspberry Pi 4 with one client at a time and one tiny test model; the rates are for the encoders we tried, not limits on what an attacker could do. Every scenario we catalogued, with its evidence, is in the [attack catalogue](docs/ATTACKS.md).
+These rates cover one tiny model on a Pi 4 and the hiding methods tried, one client at a time. They do not bound a better attacker.
 
 ## Status
+
+<details><summary>Built, measured and planned versions</summary>
 
 <!-- ANCHOR: status -->
 | Version | What it is | Status |
@@ -43,21 +39,13 @@ Measured on a real Raspberry Pi 4 with one client at a time and one tiny test mo
 | v2 | Secure boot, two physical ports, a counter against restoring an old update store, signed images | Planned |
 <!-- ANCHOR_END: status -->
 
-## Read more
+</details>
 
-The write-up is a short book in `book/`. Its pages, readable here on GitHub:
+## Read and run
 
-- [Overview](book/src/introduction.md)
-- [How the endpoint works](book/src/tour.md) (the whole system on one page, with diagrams)
-- [What a hacked server can still leak](book/src/leakage.md)
-- [How hard the endpoint is to attack](book/src/hardening.md)
-- [Measurements](book/src/results.md)
-- [Limitations and open questions](book/src/limitations.md)
-- Reference: [threat model](docs/THREAT_MODEL.md), [attack catalogue](docs/ATTACKS.md), [endpoint service spec](docs/SERVICE_SPEC.md), [request binding spec](docs/BINDING_SPEC.md), [reproduce](book/src/reproduce.md), [repository map](book/src/repo-map.md), [glossary](book/src/glossary.md)
+Start with the [Overview](book/src/introduction.md), then [How it works](book/src/tour.md). The book links [leakage](book/src/leakage.md), [hardening](book/src/hardening.md), [measurements](book/src/results.md), [limitations](book/src/limitations.md), specifications and evidence.
 
-To read it as a website, build it with [mdBook](https://github.com/rust-lang/mdBook) 0.5.4: `mdbook serve book`, then open http://localhost:3000.
-
-## Quick start
+Build with [mdBook](https://github.com/rust-lang/mdBook) 0.5.4: `mdbook serve book`, then open http://localhost:3000.
 
 ```sh
 uv venv --python 3.12 .venv
@@ -65,10 +53,8 @@ uv pip install --python .venv/bin/python "ezkl==23.0.5" onnx numpy pytest
 .venv/bin/python -m pytest -q
 ```
 
-The tests download the proof system's pinned setup file if `prover/artifacts/kzg.srs` isn't present. Running the endpoint and the Pi experiments: [Reproduce the results](book/src/reproduce.md).
+Tests download and check the pinned setup file if `prover/artifacts/kzg.srs` is absent. Commands and requirements: [Reproduce](book/src/reproduce.md). Navigation: [repository map](book/src/repo-map.md), [glossary](book/src/glossary.md) and [attack catalogue](docs/ATTACKS.md).
 
 ## Scope
 
-In scope: hardening and measuring the endpoint, tying each proof to its question, the update path, secure boot, and signals a hacked server controls (timing, order, deliberate failures, packet sizes and headers).
-
-Out of scope: whether the proof system itself is sound, physical attacks on the device (including power or electromagnetic side channels), and what ordinary correct answers reveal about a model.
+We harden and measure the endpoint, request binding, updates, secure boot and server-controlled signals, including packet sizes and headers. Proof-system soundness, physical attacks and what ordinary correct outputs reveal are outside scope. Physical exclusions include power and electromagnetic channels.
