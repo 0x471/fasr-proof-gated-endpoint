@@ -350,12 +350,14 @@ The 128-answer runs rounded times to 0.1 ms, leaving only 19-30 distinct values 
 
 "Not detected" is not "small". This asks how large a shift between bit-1 and bit-0 answers each fixed-release run still allows, and what such a shift could carry. Tool: `observer/shift_bound.py`. It takes a 95% bootstrap interval for the mean shift and a robust noise estimate, then applies the Gaussian channel formula at the larger end of the interval.
 
+<!-- ANCHOR: timing-limits -->
 | Run | Answers | Shift (ms) | 95% interval (ms) | Noise (ms) | At most (bit/answer) |
 |---|---|---|---|---|---|
 | Stripped image, spin, timing code (30 Oct) | 512 | -0.018 | -0.046 to +0.009 | 0.093 | 0.042 |
 | Its honest control, same labels | 512 | +0.078 | -0.081 to +0.343 | 0.227 | 0.33 |
 | Load code, protocol 4 (2 Nov) | 256 | -0.046 | -0.397 to +0.314 | 1.92 | 0.008 |
 | Three clients, protocol 5 (2 Nov) | 258 | +0.057 | -0.014 to +0.129 | 0.205 | 0.069 |
+<!-- ANCHOR_END: timing-limits -->
 
 At one client and 4 s per answer, 0.042 bit/answer is about 38 bits per hour. The honest control comes out higher than the signal run: one 28.6 ms late answer widens its interval. These numbers measure what the data can rule out, not leakage.
 
@@ -381,6 +383,7 @@ A server allowed delay up to A can carry up to log2(1 + A/R) bit per answer, exa
 
 The simulation used honest-time noise with sd 20 ms, a 200 ms shift and 4,096 answers. The 4-bin estimator understates the exact value. Every tested random sleep remained significant, including 0-4 s sleeps that add 2 s on average.
 
+<!-- ANCHOR: random-sleeps -->
 | Release rule | Added wait on average | Upper bound, d/R | Binned estimate | p (500 shuffles) |
 |---|---|---|---|---|
 | Random sleep 0-0.5 s | 0.25 s | 0.4 bit | 0.26 bit | 0.002 |
@@ -388,6 +391,7 @@ The simulation used honest-time noise with sd 20 ms, a 200 ms shift and 4,096 an
 | Random sleep 0-2 s | 1 s | 0.1 bit | 0.016 bit | 0.002 |
 | Random sleep 0-4 s | 2 s | 0.05 bit | 0.005 bit | 0.002 |
 | Fixed release, 4 s | 3.2 s | 0 | 0.000 bit | 1.0 |
+<!-- ANCHOR_END: random-sleeps -->
 
 With a 50 ms shift and 512 answers, sleeps from 0-0.5 s upwards were not significant: p = 0.076 to 0.53. Yet d/R remains 0.1 down to 0.0125 bit per answer. Finding nothing at one sample size does not establish that random sleep closed the channel.
 
@@ -412,10 +416,12 @@ Could overlapping proof checks or concurrent clients shift releases? One overlap
 
 Both tests were pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. They used image `aa289680...`, fixed release 4 s, 5 ms spin and an idle laptop.
 
+<!-- ANCHOR: load-and-clients -->
 | Protocol | Runs | Held-out decoder (signal / control) | Secondary | Verdict (rule fixed in advance) |
 |---|---|---|---|---|
 | 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | not detected: one overlapping check per release doesn't move releases on this image at n = 256 |
 | 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | inconclusive: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
+<!-- ANCHOR_END: load-and-clients -->
 
 Protocol 4 does not cover stacked checks across one release, flooding, or forcing checker and event loop onto one core.
 
@@ -433,6 +439,7 @@ How much information remains, and how many answers are lost? Each run matched `o
 
 Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. Runs used stock OS, Rust CI binary `f8b56ec` (`6f7f8702...`), fixed release 4 s, 5 ms spin and one client. Each run had 128 answers, with 32 planted random bits encoded by failing one chosen answer per 16.
 
+<!-- ANCHOR: cap-vs-halt -->
 | Failure policy | Planted bits read back (of 32) | Answers ok (of 128) | At most, for any failure code (`observer/cap_bound.py`) |
 |---|---|---|---|
 | No cap | 32 (no errors) | 120 | 128 bits (one per answer) |
@@ -440,6 +447,7 @@ Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. Runs used stock OS, Rust CI b
 | Cap: 2 failures per 64 replies, then 32 unavailable | 12 | 62 | 34.99 bits |
 | Stop after the first failure | none (the first answer failed, and nothing was answered after it) | 0 | the stopping position: at most log2(129) = 7.0 bits, once, until someone restarts it |
 | Honest server, same cap as the second row | (no bits planted) | 128 | |
+<!-- ANCHOR_END: cap-vs-halt -->
 
 ## What these results don't show
 
