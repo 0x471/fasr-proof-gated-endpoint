@@ -64,6 +64,13 @@ jobs:
           export CC_aarch64_unknown_linux_musl=musl-gcc
           export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
           cargo +nightly-2025-12-01 build --manifest-path endpoint/Cargo.toml --release --locked --target aarch64-unknown-linux-musl
+          # Static with no loader, a non-executable stack, RELRO and no writable code. Not PIE: this
+          # Rust target has no static-pie support, so the code sits at a fixed address.
+          readelf -lW endpoint/target/aarch64-unknown-linux-musl/release/pge-endpoint > "$RUNNER_TEMP/segments.txt"
+          if grep -q INTERP "$RUNNER_TEMP/segments.txt"; then echo "dynamically linked"; exit 1; fi
+          grep -E '^\s+GNU_STACK' "$RUNNER_TEMP/segments.txt" | grep -qv RWE
+          grep -q GNU_RELRO "$RUNNER_TEMP/segments.txt"
+          if grep -E '^\s+LOAD' "$RUNNER_TEMP/segments.txt" | grep -q RWE; then echo "writable code"; exit 1; fi
           PGE_RUST_BIN="$PWD/endpoint/target/aarch64-unknown-linux-musl/release/pge-endpoint" \
             python -m pytest tests/test_endpoint_rust.py tests/test_endpoint_rust_cap.py tests/test_endpoint_rust_robust.py tests/test_endpoint_rust_update.py -q -rs
       - name: record the static aarch64 endpoint
