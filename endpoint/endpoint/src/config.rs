@@ -28,6 +28,8 @@ pub struct Config {
     pub policy: Policy,
     pub proof_bytes: usize,
     pub idle: Duration,
+    /// A CPU for the event loop alone; its helper threads and checkers run on the others.
+    pub release_cpu: Option<usize>,
 }
 fn seconds(s: &str, allow_zero: bool, max: f64) -> Result<u64, String> {
     let v: f64 = s.parse().map_err(|_| "invalid time")?;
@@ -67,6 +69,7 @@ impl Config {
             "--store",
             "--root",
             "--device",
+            "--release-cpu",
         ];
         while let Some(arg) = args.next() {
             let (key, value) = if let Some((k, v)) = arg.split_once('=') {
@@ -175,6 +178,10 @@ impl Config {
             policy,
             proof_bytes,
             idle,
+            release_cpu: map
+                .get("--release-cpu")
+                .map(|s| s.parse::<usize>().ok().filter(|&c| c < 1024).ok_or("invalid cpu"))
+                .transpose()?,
         })
     }
 }

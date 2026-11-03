@@ -390,6 +390,53 @@ pub fn sandbox() -> io::Result<()> {
     Ok(())
 }
 
+/// Moves the calling thread onto `cpu` and returns the other CPUs it was allowed, for the threads
+/// it starts later (`pin`). `cpu` may be one the kernel keeps out of the default set (isolcpus);
+/// it fails if `cpu` is offline or no other CPU is left.
+#[cfg(target_os = "linux")]
+pub fn reserve_cpu(cpu: usize) -> io::Result<Vec<usize>> {
+    // A zeroed cpu_set_t is the empty set; sched_*affinity only read and write the set given.
+    let mut set: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+    if unsafe { libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let allowed: Vec<usize> = (0..libc::CPU_SETSIZE as usize)
+        .filter(|&c| unsafe { libc::CPU_ISSET(c, &set) })
+        .collect();
+    let others: Vec<usize> = allowed.into_iter().filter(|&c| c != cpu).collect();
+    if others.is_empty() {
+        return Err(io::Error::other("no other cpu"));
+    }
+    pin(&[cpu])?;
+    Ok(others)
+}
+
+/// Restricts the calling thread (and what it starts) to `cpus`.
+#[cfg(target_os = "linux")]
+pub fn pin(cpus: &[usize]) -> io::Result<()> {
+    let mut set: libc::cpu_set_t = unsafe { std::mem::zeroed() };
+    for &c in cpus {
+        if c >= libc::CPU_SETSIZE as usize {
+            return Err(io::Error::other("cpu out of range"));
+        }
+        unsafe { libc::CPU_SET(c, &mut set) };
+    }
+    if unsafe { libc::sched_setaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &set) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn reserve_cpu(_cpu: usize) -> io::Result<Vec<usize>> {
+    Err(io::Error::other("cpu placement needs Linux"))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn pin(_cpus: &[usize]) -> io::Result<()> {
+    Ok(())
+}
+
 /// Confines the running endpoint once its sockets, log and model files are open. Landlock lets it
 /// open no file and execute only its own binary (to start checkers); descriptors it already holds
 /// keep working. A seccomp allow-list then limits it to the calls it needs. Checkers inherit both
@@ -464,6 +511,8 @@ pub fn confine(exe: &std::path::Path) -> io::Result<()> {
     Filter::new()
         .allow_if(libc::SYS_socket, 0, &[libc::AF_INET as u32])
         .allow_if(libc::SYS_ioctl, 1, &[libc::FIONBIO as u32])
+        // Only for the calling thread (pid 0): helper threads leave the event loop's CPU.
+        .allow_if(libc::SYS_sched_setaffinity, 0, &[0])
         .allow_if(
             libc::SYS_prctl,
             0,

@@ -447,6 +447,12 @@ pub fn run(mut config: Config) -> Result<(), String> {
     let mut delay = Duration::from_millis(500);
     let mut was_connected = false;
     let mut release_at: Option<u64> = None;
+    // With --release-cpu the event loop keeps that CPU; every thread it starts moves to the others,
+    // and the checkers they start inherit that.
+    let others = match endpoint.config.release_cpu {
+        Some(cpu) => Some(crate::process::reserve_cpu(cpu).map_err(|e| format!("release cpu: {e}"))?),
+        None => None,
+    };
     let exe = std::env::current_exe().map_err(|_| "own binary")?;
     crate::process::confine(&exe).map_err(|e| format!("confine: {e}"))?;
     let _ = crate::EXE.set(exe);
@@ -460,7 +466,11 @@ pub fn run(mut config: Config) -> Result<(), String> {
             let (tx, rx) = mpsc::channel();
             let addr = endpoint.config.server;
             let wake = Arc::clone(&wake_tx);
+            let cpus = others.clone();
             let spawned = thread::Builder::new().spawn(move || {
+                if let Some(cpus) = &cpus {
+                    let _ = crate::process::pin(cpus);
+                }
                 let _ = tx.send(TcpStream::connect_timeout(&addr, Duration::from_secs(10)));
                 let _ = (&*wake).write(&[1]);
             });
@@ -523,9 +533,14 @@ pub fn run(mut config: Config) -> Result<(), String> {
                     let wake = Arc::clone(&wake_tx);
                     let len = endpoint.config.proof_bytes;
                     let seq = job.seq;
+                    let cpus = others.clone();
                     let started = thread::Builder::new().spawn(move || {
-                        let verdict =
-                            crate::verify_job(bundle, job.data, Duration::from_nanos(left), len);
+                        // A checker that couldn't leave the event loop's CPU would break the
+                        // experiment that asked for it, so it counts as a verifier error.
+                        let verdict = match &cpus {
+                            Some(cpus) if crate::process::pin(cpus).is_err() => Verdict::Error,
+                            _ => crate::verify_job(bundle, job.data, Duration::from_nanos(left), len),
+                        };
                         let _ = tx.send((job.seq, verdict));
                         let _ = (&*wake).write(&[1]);
                     });

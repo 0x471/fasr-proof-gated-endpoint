@@ -79,7 +79,7 @@ fn main() -> ExitCode {
         return store::apply(&args);
     }
     if args == ["--help"] {
-        println!("pge-endpoint --listen HOST:PORT --server HOST:PORT --bundle DIR --pins FILE --proof-bytes N [--domain FILE] [--deadline SECONDS] [--max-pending N] [--halt-after N] [--log FILE] [--spin-ms MS] [--release arrival|fixed] [--idle SECONDS] [--cap-window W --cap-failures F --cap-cooldown C]\n  instead of --bundle/--pins/--domain: --store DIR --root FILE --device ID\npge-endpoint --apply-update DIR --root FILE --device ID --store DIR");
+        println!("pge-endpoint --listen HOST:PORT --server HOST:PORT --bundle DIR --pins FILE --proof-bytes N [--domain FILE] [--deadline SECONDS] [--max-pending N] [--halt-after N] [--log FILE] [--spin-ms MS] [--release arrival|fixed] [--idle SECONDS] [--cap-window W --cap-failures F --cap-cooldown C] [--release-cpu N]\n  instead of --bundle/--pins/--domain: --store DIR --root FILE --device ID\npge-endpoint --apply-update DIR --root FILE --device ID --store DIR");
         return ExitCode::SUCCESS;
     }
     match config::Config::parse(args).and_then(service::run) {
