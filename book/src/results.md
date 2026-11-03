@@ -98,6 +98,7 @@ We scanned each version and recorded its services. The development image had no 
 <!-- ANCHOR: attack-surface -->
 | Version | Seen from outside | Notes |
 |---|---|---|
+| v1.1, 3 Nov night (`b037c669...`, booted on the Pi 3 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped | The endpoint started, so on the device the dm-verity root mounted, every kernel setting read back, the firewall loaded and the endpoint confined itself. 16/16 honest answers ok, each 4000.9-4001.1 ms after it was sent; a flooding server was dropped (4/4 `unavailable`, each at 4.0 s). Kernel options, CPU mitigations and the radio switch-off: checked in the build and in QEMU, not observable on the device |
 | v0 (stock OS, 16 Oct) | TCP 22 (ssh) and 8700 (the endpoint); UDP 5353 (mDNS) | 633 packages, 13 running services |
 | v0 (stock OS, 29 Oct, endpoint not running) | TCP 22 only (`nmap -p-`); 691 TCP ports showed as filtered, most likely an artefact of the scan (on the v1 image the same pattern re-probed one by one came back closed); UDP not scanned. On the device: UDP 5353 (mDNS) and two unattributed UDP ports | 633 packages, 13 running services, 66 kernel modules (Wi-Fi and Bluetooth drivers loaded); per-port software in `docs/ATTACK_SURFACE.md` |
 | v1 hardened image (2 Nov, `aa289680...`, booted on the Pi 2 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped (connect scan of every port from the laptop) | The endpoint started, so both start-up checks passed on the device: firewall rules loaded, module loading switched off. 16/16 honest answers ok, each 4000.8-4002.0 ms after it was sent. Locked-down kernel and no login: checked in the build (`image/build.sh`), not observed on the device (no screen attached, no login by design) |
@@ -110,7 +111,7 @@ We scanned each version and recorded its services. The development image had no 
 
 ### Can another machine reproduce the image?
 
-The first hardened build matched user space apart from build metadata. v1.1 then made the kernel reproducible too, excluding signing-key-dependent files. v1.1 has not yet booted on the Pi.
+The first hardened build matched user space apart from build metadata. v1.1 then made the kernel reproducible too, excluding signing-key-dependent files. That 2 Nov v1.1 build never booted on the Pi; the 3 Nov night build did, and has not yet been compared with CI.
 
 <details><summary>Two independent builds, then the reproducible v1.1 build, 2 Nov</summary>
 
@@ -189,6 +190,25 @@ The first image used its own settings: fixed release, 4 s and 5 ms spin, with th
 Both leakage runs used the matrix's bits and overlapped a port scan. Their timing is a smoke check only.
 
 The update-store/firewall image brought port 8700 back about 21 s after power-on. Honest replies were 9/9 at 4001-4005 ms, using fixed release from the signed manifest. Changed outputs and garbage were each refused 3/3. Replayed answers for the same question were accepted 3/3 by design.
+
+</details>
+
+### Does the root check stop a changed card? (3 Nov night)
+
+Can someone who edits the card while the device is off change the software it runs? The 3 Nov night image mounts its root through dm-verity, which checks each block against a hash tree when it is read.
+
+- One flipped bit in the first block of `/bin/busybox`, on the card, written from the Mac with `images/tamper_card.sh` (only after the sector matched the image): the Pi did not come up. Port 8700 stayed closed and the Pi didn't answer on the network for 2 minutes, though powered.
+- The same bit written back, same cable and power: port 8700 open at once, 8/8 honest answers ok.
+- The same kernel and image in QEMU's Pi 4 model, where the console is visible: `data block 2994 is corrupted`, init couldn't run, and the kernel stopped.
+
+This stops edits to the root file system. It doesn't stop someone who rewrites the card's boot partition too, because the hash it checks against is stored there. Secure boot would close that; it isn't built. The update store has its own signatures.
+
+<details><summary>How much code the device runs (3 Nov night build)</summary>
+
+- Kernel image: 15,024,640 bytes, down from 15,897,088 in the 3 Nov day build.
+- C source linked into the kernel: 1,976 files, 1,641,153 lines, headers and assembly not counted (objects from `vmlinux.a`).
+- Target packages: 19, including BusyBox (about 162k C lines compiled), glibc, nftables, kmod and xz. Nothing on the image loads modules, so kmod and xz could go.
+- Our Rust: 3,732 lines in five crates; `Cargo.lock` lists 206 packages, mostly EZKL's.
 
 </details>
 
