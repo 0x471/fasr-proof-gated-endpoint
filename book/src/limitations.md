@@ -9,6 +9,7 @@
 
 - **Two physical ports.** The v1 image runs the endpoint, but the server side and the outside still share one cable; a board with a second wired port is planned.
 - **v2:** secure boot (which permanently writes a key into the board, so it needs a spare board); a TPM counter so a whole older copy of the update store can't be restored (K43); a power-loss test of update installation on the Pi's file system; a hash-chained log sent to a separate collector.
+- **Proofs the size of real ones.** The wire takes at most 64 KiB of proof, sized for the test model. Proofs of real models are megabytes (Attestable's published figures, FlashProve's examples), so a real prover needs a larger frame, more memory for each waiting answer and a longer release time.
 - **Update delivery on the device.** The image has no login; a new update comes as a new image or is applied to the card's store on another machine, where the same rollback and replay rules apply because the state lives on the card.
 - **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and on the Pi (pre-registered, cap versus stopping) far fewer hidden bits got out, at a cost in availability while the server keeps failing ([Measurements](results.md)). Timing needs its own accounting. The cap's count lives in memory, so it bounds failures per boot: any restart starts a fresh window (K50).
 
@@ -26,6 +27,7 @@
 - One pinned model and circuit; the binding rules are specific to EZKL 23.0.5.
 - The endpoint binary, with EZKL's verifier inside it, is trusted, with its failures contained: if the verifier wrongly said ACCEPT, the endpoint couldn't tell. On the v1 image the model files, the domain file and the release policy come from the signed store and are checked at start; the bundle's hashes are checked again before every check. The binary itself relies on the read-only image (and, in v2, secure boot). The Python reference endpoint additionally trusts the EZKL command-line tool and the interpreter.
 - The proof system is sound. Its soundness is out of scope.
+- The board's chips and closed firmware (the boot firmware runs before our code) are trusted. A backdoored endpoint would let everything out; a real deployment needs hardware that can be audited, or two endpoints from different vendors in series.
 - The machines that build the device's software weren't compromised. The endpoint binary is built on GitHub's CI from pinned sources; the image is built in a virtual machine on the laptop from hash-checked sources and checked afterwards. A second build on a clean runner matched it file by file except for build metadata, and the v1.1 build is reproducible: the laptop and a clean runner produce the same files, kernel included, apart from those that depend on the signing key ([Measurements](results.md)). Both builds still trust Buildroot, the upstream sources and their published hashes (`docs/ATTACK_SURFACE.md`).
 
 ## Out of scope
