@@ -96,4 +96,4 @@ No error text is logged: in v0 it could carry server-chosen values (the number o
 
 ## 8. Not yet
 
-Writing outgoing packets itself, the separate log partition and a separate unprivileged user for the verifier (both on the v1 image), alerts with a response beyond `halt_after`, signed updates.
+Writing outgoing packets itself, the separate log partition and a separate unprivileged user for the verifier (both on the v1 image), alerts with a response beyond `halt_after`. Signed updates were added on 29 Oct (`docs/UPDATE_SPEC.md`).
