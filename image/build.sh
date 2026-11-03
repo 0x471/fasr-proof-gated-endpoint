@@ -51,6 +51,7 @@ make -C "$BR" O="$WORK/out" raspberrypi4_64_defconfig
   echo "BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=\"$HERE/kernel.fragment\""
   echo "BR2_ROOTFS_POST_BUILD_SCRIPT=\"board/raspberrypi4-64/post-build.sh $HERE/post-build.sh\""
   echo "BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE=\"$HERE/config.txt\""
+  echo "BR2_PACKAGE_HOST_CRYPTSETUP=y"
 } > "$WORK/fragment"
 cat "$WORK/fragment" >> "$WORK/out/.config"
 make -C "$BR" O="$WORK/out" olddefconfig
@@ -75,8 +76,19 @@ grep -q '^tmpfs[[:space:]]*/tmp[[:space:]]*tmpfs[[:space:]]*[^[:space:]]*size=64
 for m in /dev/shm /tmp /run; do
   grep -Eq "^tmpfs[[:space:]]+$m[[:space:]]+tmpfs[[:space:]]+[^[:space:]]*size=[^[:space:]]*noexec" "$WORK/out/target/etc/fstab" || { echo "$m: no size cap or noexec" >&2; exit 1; }
 done
-# The radio chip is off in the firmware's config.
+# The radio chip is off in the firmware's config, and the root is mounted through dm-verity: check
+# that the hash tree on partition 4 matches the root image and the hash on the kernel command line.
 IMG="$WORK/out/images"
 grep -qx 'dtoverlay=disable-bt' "$IMG/rpi-firmware/config.txt" && grep -qx 'dtoverlay=disable-wifi' "$IMG/rpi-firmware/config.txt" \
   || { echo "config.txt doesn't switch the radios off" >&2; exit 1; }
+table="$(sed -n 's/.*dm-mod.create="\([^"]*\)".*/\1/p' "$IMG/rpi-firmware/cmdline.txt")"
+read -r _ _ _ _ _ _ _ _ blocks _ _ roothash salt <<<"${table#*,ro,}"
+grep -q '^root=/dev/dm-0 ' "$IMG/rpi-firmware/cmdline.txt" && [ -n "$salt" ] || { echo "root isn't mounted through dm-verity" >&2; exit 1; }
+"$WORK/out/host/sbin/dumpe2fs" -h "$IMG/rootfs.ext4" 2>/dev/null | grep -q '^Block size: *4096$' || { echo "root file system doesn't use 4 KiB blocks" >&2; exit 1; }
+"$WORK/out/host/sbin/veritysetup" verify --no-superblock --hash sha256 --salt "$salt" --data-blocks "$blocks" \
+  --data-block-size 4096 --hash-block-size 4096 "$IMG/rootfs.ext4" "$IMG/verity.img" "$roothash" \
+  || { echo "verity tree doesn't match the root image" >&2; exit 1; }
+for f in cmdline.txt config.txt; do
+  cmp -s <("$WORK/out/host/bin/mtype" -i "$IMG/boot.vfat" "::$f") "$IMG/rpi-firmware/$f" || { echo "boot partition has another $f" >&2; exit 1; }
+done
 sha256sum "$WORK/out/images/sdcard.img"

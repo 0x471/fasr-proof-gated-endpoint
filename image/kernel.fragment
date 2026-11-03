@@ -53,3 +53,8 @@ CONFIG_LIST_HARDENED=y
 CONFIG_BUG_ON_DATA_CORRUPTION=y
 CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT=y
 CONFIG_SCHED_STACK_END_CHECK=y
+# The root file system is checked block by block against a hash tree (dm-verity), set up by the
+# kernel itself from the command line, so no initramfs is needed.
+CONFIG_BLK_DEV_DM=y
+CONFIG_DM_INIT=y
+CONFIG_DM_VERITY=y

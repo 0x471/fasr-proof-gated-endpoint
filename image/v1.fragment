@@ -4,6 +4,9 @@
 BR2_SYSTEM_DHCP=""
 # Keep the root filesystem read-only after boot; logs and run state live on tmpfs.
 # BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW is not set
+# 4 KiB blocks: dm-verity presents the root with its own block size (post-image.sh), and ext4 can't
+# mount 1 KiB blocks (the default for this size) on it.
+BR2_TARGET_ROOTFS_EXT2_MKFS_OPTIONS="-O ^64bit -b 4096"
 # The firewall (rules in the overlay's /etc/nftables.conf).
 BR2_PACKAGE_NFTABLES=y
 # No login anywhere: no getty on the console and a locked root account. Updates arrive as a new image
