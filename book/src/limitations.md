@@ -1,43 +1,54 @@
 # Limitations and open questions
 
 > **In short**
-> - Not built yet: two physically separate ports, secure boot, a counter that stops a whole older store being restored, update delivery on the device, a hash-chained log.
-> - Not measured yet: a real upper bound on leakage, several users at once, packet-level signals, the speed-versus-leakage trade-off.
-> - The results assume all of the server's traffic goes through the endpoint, one approved model, and a sound proof system.
+> - Physical separation, secure boot, rollback-resistant storage, on-device update delivery and a hash-chained log are unfinished.
+> - Timing capacity, packet signals and the latency trade-off remain unresolved. Load and several-client tests are limited.
+> - The results assume a sound proof system, one approved model and no route around the endpoint.
 
 ## Not built yet
 
-- **Two physical ports.** The v1 image runs the endpoint, but the server side and the outside still share one cable; a board with a second wired port is planned.
-- **v2:** secure boot (which permanently writes a key into the board, so it needs a spare board); a TPM counter so a whole older copy of the update store can't be restored (K43); a power-loss test of update installation on the Pi's file system; a hash-chained log sent to a separate collector.
-- **Proofs the size of real ones.** The wire takes at most 64 KiB of proof, sized for the test model. Proofs of real models are megabytes (Attestable's published figures, FlashProve's examples), so a real prover needs a larger frame, more memory for each waiting answer and a longer release time.
-- **Update delivery on the device.** The image has no login; a new update comes as a new image or is applied to the card's store on another machine, where the same rollback and replay rules apply because the state lives on the card.
-- **The failure channel** is only reduced. The Rust endpoint caps failures per window, which bounds what the failure pattern alone can carry, and on the Pi (pre-registered, cap versus stopping) far fewer hidden bits got out, at a cost in availability while the server keeps failing ([Measurements](results.md)). Timing needs its own accounting. The cap's count lives in memory, so it bounds failures per boot: any restart starts a fresh window (K50).
+| Missing part | Why it matters |
+|---|---|
+| Two physical ports | Both sides share one cable. A second wired port is planned. |
+| Secure boot | Permanently writes a key into the board, so needs a spare board. Nothing has been run yet. |
+| TPM counter | Prevents restoring a whole older update store. Current rollback checks cannot stop that. |
+| Power-loss test on the Pi | Update installation still needs testing on the Pi's file system. |
+| Hash-chained log and separate collector | Current logs stay on the device. |
+| Real-size proof support | The wire allows at most 64 KiB, sized for the toy model. Attestable's published figures and FlashProve's examples are megabytes. A real prover needs larger frames, more memory per waiting answer and longer release times. |
+| On-device update delivery | With no login, updates require a new image or offline access to the card. The card's stored state enforces the same replay and rollback rules offline. |
 
-## Not measured yet
+The [failure cap](leakage.md#what-a-cap-can-do) reduces leakage at a cost in availability. Its bound covers failure patterns only, per boot: restarting resets the in-memory count. Timing needs separate accounting.
 
-- **A capacity bound.** The numbers are achieved rates for planted bits and one binned mutual-information statistic (`observer/estimate.py`, checked on synthetic channels with known values). Checking an estimator on known distributions is not a bound on what an arbitrary encoder and observer can achieve; no such bound is claimed.
-- **Load and several clients** were each run once ([Measurements](results.md): one overlapping check per release, not detected; three clients, inconclusive). Stacked checks, flooding, more answers for the three-client case, and packet captures on the outside link are not done yet.
-- **The `busy` channel:** under fixed release, which requests come back `busy` doesn't depend on the server (a state-machine test, K17); in arrival order it does, and under load the event loop's own delays (K34) are not measured.
-- **The budget trade-off:** fixed release was run with one budget (4 s). How much of it honest answers use, with one and three clients, is in [Measurements](results.md); leakage against other budgets is not measured.
-- **The residual timing trace** under fixed release: its mechanism (two candidates: how long the processor takes to wake from idle, and its speed changing with load; the v1 image's kernel defaults to the lowest processor speed, which may be why its run showed nothing), and whether the redesigned spin removes it. {{#include results.md:spin-verdict}} Settling it needs more answers, and several clients are untested.
+## Not settled by measurement
 
-## Assumptions the results rest on
+- A capacity bound for arbitrary hiding methods and observers. Planted-bit rates and one binned information statistic are insufficient. Testing the estimator against known synthetic channels does not provide such a bound.
+- Load and several clients. One overlapping check per release was not detected; one three-client run was inconclusive. Stacked checks, flooding, longer three-client tests and outside packet captures remain undone.
+- Queue pressure. Under fixed release, a state-machine test shows that server choices do not determine which requests get `busy`. Arrival order remains open. The event loop's own delays under load remain an unresolved part of that channel.
+- The budget trade-off. Fixed release used 4 s. Honest use of that budget is measured for one and three clients; leakage under other budgets is not.
+- The timing trace's cause. Candidates include waking from idle and processor-speed changes under load. The image defaults to the lowest processor speed, which may explain its result; this has not been isolated.
 
-- Every path from the server to the outside goes through the device. With one shared cable this is not enforced physically.
-- One pinned model and circuit; the binding rules are specific to EZKL 23.0.5.
-- The endpoint binary, with EZKL's verifier inside it, is trusted, with its failures contained: if the verifier wrongly said ACCEPT, the endpoint couldn't tell. On the v1 image the model files, the domain file and the release policy come from the signed store and are checked at start; the bundle's hashes are checked again before every check. The binary itself relies on the read-only image (and, in v2, secure boot). The Python reference endpoint additionally trusts the EZKL command-line tool and the interpreter.
-- The proof system is sound. Its soundness is out of scope.
-- The board's chips and closed firmware (the boot firmware runs before our code) are trusted. A backdoored endpoint would let everything out; a real deployment needs hardware that can be audited, or two endpoints from different vendors in series.
-- The machines that build the device's software weren't compromised. The endpoint binary is built on GitHub's CI from pinned sources; the image is built in a virtual machine on the laptop from hash-checked sources and checked afterwards. A second build on a clean runner matched it file by file except for build metadata, and the v1.1 build is reproducible: the laptop and a clean runner produce the same files, kernel included, apart from those that depend on the signing key ([Measurements](results.md)). Both builds still trust Buildroot, the upstream sources and their published hashes (`docs/ATTACK_SURFACE.md`).
+The redesigned spin still needs more data to settle the trace. The existing three-client run does not settle it either. Read the [spin verdict](results.md#what-fixed-release-leaves) and [load results](results.md#load-and-several-clients-on-the-hardened-image-2-nov-protocols-4-and-5) with their conditions.
+
+## What must be trusted
+
+Every server-to-outside path must cross the endpoint. The shared cable does not enforce that physically. We use one pinned model and circuit, with binding specific to EZKL 23.0.5.
+
+The endpoint binary includes EZKL's verifier. It contains crashes and hangs, but cannot detect a verifier that wrongly says ACCEPT. On v1, the signed store supplies the model, domain file and release policy, checked at start. Bundle hashes are re-checked for each proof.
+
+The binary relies on the read-only image, and later on v2 secure boot. The Python reference also trusts its interpreter and EZKL command-line tool. [Proof-system soundness](glossary.md) is assumed and outside scope.
+
+The chips and closed boot firmware are trusted; that firmware runs before our code. A backdoored endpoint could release everything. A real deployment needs auditable hardware or endpoints from two vendors in series.
+
+Build machines must be uncompromised. CI builds the binary from pinned sources; a laptop VM builds the image from hash-checked sources and checks it afterwards. Independent builds and v1.1 reproducibility are documented in [Measurements](results.md#attack-surface). Both still trust Buildroot, upstream sources and published hashes; see the [build-machine reference](https://github.com/0x471/fasr-proof-gated-endpoint/blob/main/docs/ATTACK_SURFACE.md#build-machines-the-supply-chain).
 
 ## Out of scope
 
-Physical attacks and physical side channels (power, electromagnetic, acoustic, thermal), what ordinary correct outputs reveal about a model (extraction from many answers), and the soundness of the proof system itself.
+Physical attacks, including power, electromagnetic, acoustic and thermal channels. Also extraction through ordinary correct answers and the proof system's soundness.
 
 ## Open questions
 
-1. After a failed check, should the device keep answering (and count failures) or stop until reset? Halting is a denial-of-service lever and still reveals where the halting failure was.
-2. Which replay property matters: never delivering an answer twice, or proving each answer was freshly computed?
-3. Should answers be ordered across all clients (a silent request then delays everyone) or per client (the server can then order answers across clients)?
-4. Who may read the device's logs? The log still carries the number and timing of events.
-5. How much latency and how many lost answers are acceptable in exchange for less leakage?
+1. After failure, keep answering and count failures, or stop until reset? Stopping permits denial of service and reveals the stopping position.
+2. Prevent duplicate delivery, or prove fresh computation? These are different replay properties.
+3. Order globally, delaying everyone behind a silent request, or per client, allowing cross-client ordering?
+4. Who can read logs that expose event counts and timing?
+5. How much latency and lost availability is acceptable for less leakage?
