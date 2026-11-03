@@ -41,7 +41,7 @@ So the server cannot directly choose the reply's encoding or copy its own packet
 | [Choosing among valid answers](side-channels/answer-choice.md) | picks which of several accepted answers to send | fix or bound output choice | not measured: our toy relation has one output per encoded input |
 | [Size, packets, queue and logs](side-channels/other.md) | varies format, packets, refusals or log events | fixed formats, fresh replies and release rules | direct choices restricted; packet effects unmeasured and logs retain information |
 
-The core experiment, run on the Pi, shows the first three side by side:
+The core Pi experiment compared immediate forwarding, arrival-order release and fixed release, with one run per table cell. It used one client; the ordering test kept several questions open on that connection. The fixed-release budget was 4 s:
 
 {{#include results.md:matrix}}
 
