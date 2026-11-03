@@ -11,6 +11,13 @@ case "$1" in
 		printf "Starting endpoint: "
 		/usr/sbin/nft list table ip pge >/dev/null 2>&1 || { echo "FAIL (no firewall)"; exit 1; }
 		[ "$(cat /proc/sys/kernel/modules_disabled)" = 1 ] || { echo "FAIL (module loading is on)"; exit 1; }
+		# Busybox sysctl exits 0 even when a key fails, so read every pge setting back.
+		for f in /etc/sysctl.d/*-pge.conf; do
+			while read -r key eq value || [ -n "$key" ]; do
+				case "$key" in ''|'#'*) continue ;; esac
+				[ "$(cat "/proc/sys/$(echo "$key" | tr . /)" 2>/dev/null)" = "$value" ] || { echo "FAIL (sysctl $key)"; exit 1; }
+			done < "$f"
+		done
 		start-stop-daemon -S -b -m -p "$PIDFILE" -c pge -x "$DAEMON" -- $ARGS && echo OK || echo FAIL
 		;;
 	stop)
