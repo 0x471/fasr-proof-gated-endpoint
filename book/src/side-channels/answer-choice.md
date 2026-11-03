@@ -29,11 +29,22 @@ The real requirement is that **the proof leaves the server no choice about the o
 
 ## What exists today
 
-- **Rinberg et al. (2025)** name this channel. If the attacker can choose or steer the randomness, "the sampler itself becomes a covert channel". Their defence is randomness bound to the request that the attacker cannot influence.
-- **Sable** (MoonMath, 2026) proves sampled replies with a seed derived from the client's nonce, the model commitment, the prompts and the settings, "so the server cannot choose the randomness". It is not zero-knowledge, however: many proofs together reveal the model's weights. Its proofs are also very large.
-- **FlashProve** (Anthropic, 2026) hides the weights, but proves only that each word is the model's top choice. It says nothing about sampling.
+Proving a model's computation in zero knowledge ("zkML") has moved fast: from small image classifiers to models with hundreds of billions of parameters. The systems differ in exactly what this page is about: how much choice they leave the server. This summary comes from each system's own description, not from our runs.
 
-No system we found does both: proving sampled replies with outside randomness while keeping the weights secret. Petrie, Muhlhauser and Drotos (2026) make the same point in general terms: their bound holds only if the proof system leaves "zero prover freedom".
+| System | How the next word is chosen | Weights hidden | Choice left to the server |
+|---|---|---|---|
+| FlashProve (Anthropic, 2026) | always the top choice | yes | none, but only for greedy decoding |
+| DeepProve (Lagrange, 2026) | always the top choice | claimed | none, but only for greedy decoding |
+| zkLLM (Sun et al., 2024) | the paper proves the model's computation, not the drawing of the next word | yes | not covered |
+| Sable (MoonMath, 2026) | sampled, with a seed the server cannot choose | no | none |
+| VerInf (Petrie, 2026) | the observed text, checked against the model | yes | not removed, but measured: the proof states a bound |
+
+- **Rinberg et al. (2025)** name this channel. If the attacker can choose or steer the randomness, "the sampler itself becomes a covert channel". Their defence is randomness bound to the request that the attacker cannot influence. Token-DiFR (Karvonen et al., 2025) checks sampled words against a reference run with the same seed. It is a statistical check, not a proof.
+- **Sable** derives its seed from the client's nonce, the model commitment, the prompts and the settings, "so the server cannot choose the randomness". It is not zero-knowledge, however: many proofs together reveal the model's weights. Its proofs are also very large.
+- **FlashProve** and **DeepProve** hide the weights but prove only that each word is the model's top choice. They say nothing about sampling.
+- **VerInf** takes the other route. It does not remove the choice. It proves an upper bound on the "unexplained information": the bits per word that the model's computation does not account for. That bounds this channel, so it fits the budget view of [From channels to a budget](budget.md). In its largest demonstration the bound was just under one bit per word. By our arithmetic, a reply of a few hundred words could then still carry a key.
+
+No system we found removes the choice while keeping the weights secret: pinning the sampling randomness from outside, as Sable does, inside a zero-knowledge proof. VerInf comes closest by hiding the weights and measuring the choice. Petrie, Muhlhauser and Drotos (2026) state the general condition: their bound holds only if the proof system leaves "zero prover freedom".
 
 ## A different problem: the model hides messages itself
 
