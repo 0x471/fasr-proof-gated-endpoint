@@ -152,7 +152,7 @@ Each version removes ways into the device and is measured the same way. v0 and v
 
 |  | v0 (measured) | v1 (measured) | v2 (planned) |
 |---|---|---|---|
-| Operating system | Raspberry Pi OS Lite (Debian 13) | Buildroot 2025.02.18 LTS: kernel 6.6, BusyBox init, read-only root; the endpoint is one static binary | as v1, inside a signed boot image |
+| Operating system | Raspberry Pi OS Lite (Debian 13) | Buildroot 2025.02.18 LTS: kernel 6.6, BusyBox init, read-only root checked with dm-verity (from 3 Nov); the endpoint is one static binary | as v1, inside a signed boot image |
 | Endpoint | Python, EZKL command-line tool | Rust, EZKL verifier as a library, unprivileged user, sandboxed checker | as v1 |
 | Network | one port, ssh and mDNS listening | one open port behind a firewall built into the kernel; the endpoint won't start without its rules | two physical ports, nothing forwarded |
 | Updates | copy files over ssh | signed model and policy in a store on a data partition; a new update comes as a new image or is applied to the card offline | as v1, plus a counter that can't roll back |
@@ -168,11 +168,12 @@ Each version removes ways into the device and is measured the same way. v0 and v
 - Starts from `raspberrypi4_64_defconfig`.
 - Adds the static endpoint, firewall and fixed address through `image/v1.fragment`.
 - Applies the signed update to the store as the device would.
+- Builds a hash tree for the root file system and writes the kernel command line that checks every block against it.
 - Checks that every added option, including kernel options, survived the build.
 
 The 2 Nov rebuild removes login prompts and [locks down the kernel](hardening.md#6-reach-the-operating-system). It booted with both start-up checks passing and only port 8700 reachable.
 
-A clean-runner build matched user-space files apart from build metadata. v1.1 is reproducible across the laptop and two CI builds, including the kernel, except for signing-key-dependent files. [Measurements](results.md#attack-surface) keeps the comparisons and distinguishes built from boot-tested images.
+A clean-runner build matched user-space files apart from build metadata. The 2 Nov v1.1 build was reproducible across the laptop and two CI builds, including the kernel, except for signing-key-dependent files; the 3 Nov night image has not been compared with CI yet. [Measurements](results.md#attack-surface) keeps the comparisons and distinguishes built from boot-tested images.
 
 v1 still lacks a second physical port and on-device update delivery.
 
