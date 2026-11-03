@@ -45,6 +45,8 @@ Build machines must be uncompromised. CI builds the binary from pinned sources; 
 
 Physical attacks, including power, electromagnetic, acoustic and thermal channels. Also extraction through ordinary correct answers and the proof system's soundness.
 
+A model that itself hides messages in its correct answers is also out of scope. The proof shows that the approved model produced an answer, not that the model is harmless, so the endpoint must release it. Language models can learn such hidden encodings ([Karpov et al., 2025](https://arxiv.org/abs/2505.03439)). Monitoring the outputs or the model is a separate defence. This differs from a hacked server choosing among a sampling model's valid answers, which the endpoint could prevent by supplying the randomness itself; our test model is deterministic, so that case wasn't measured.
+
 ## Open questions
 
 1. After failure, keep answering and count failures, or stop until reset? Stopping permits denial of service and reveals the stopping position.
