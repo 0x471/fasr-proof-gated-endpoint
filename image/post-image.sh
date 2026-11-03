@@ -6,7 +6,7 @@ set -euo pipefail
 : "${PGE_DATA:?build.sh sets PGE_DATA}"
 rm -f "$BINARIES_DIR/data.ext4" "$BINARIES_DIR/verity.img" "$BINARIES_DIR/boot.vfat" "$BINARIES_DIR/sdcard.img"
 # Root owns the store on the device; the endpoint (user pge) only reads it.
-"$HOST_DIR/bin/fakeroot" -- sh -c 'chown -R 0:0 "$1" && chmod -R go-w "$1" && "$2/sbin/mkfs.ext4" -q -L data -d "$1" "$3" 64M' \
+"$HOST_DIR/bin/fakeroot" -- sh -c 'chown -R 0:0 "$1" && chmod -R go-w "$1" && "$2/sbin/mkfs.ext4" -q -L data -U 70676500-0000-4000-8000-000000000003 -E hash_seed=70676500-0000-4000-8000-000000000004 -d "$1" "$3" 64M' \
   sh "$PGE_DATA" "$HOST_DIR" "$BINARIES_DIR/data.ext4"
 
 # A fixed salt: a random one would differ in every build, so two builds couldn't be compared. The
@@ -26,8 +26,9 @@ printf 'root=/dev/dm-0 dm-mod.waitfor=/dev/mmcblk0p2,/dev/mmcblk0p4 dm-mod.creat
   $((size / 512)) $((size / 4096)) "$hash" "$SALT" "${PGE_CMDLINE_EXTRA:+ $PGE_CMDLINE_EXTRA}" \
   > "$BINARIES_DIR/rpi-firmware/cmdline.txt"
 
-# The board script's boot partition, rebuilt with this command line, then all four partitions.
-{ sed '/^image sdcard.img/,$d' "$BINARIES_DIR/genimage.cfg"
+# The board script's boot partition, rebuilt with this command line and a fixed volume id (mkdosfs
+# picks a random one), then all four partitions.
+{ sed '/^image sdcard.img/,$d; s/^\([[:space:]]*\)vfat {$/&\n\1\textraargs = "-i 70676505"/' "$BINARIES_DIR/genimage.cfg"
   cat <<'CFG'
 image sdcard.img {
 	hdimage {
