@@ -5,6 +5,9 @@ PIDFILE=/var/run/endpoint.pid
 # The model and the release policy come from the signed update store on the data partition.
 ARGS="--listen 192.168.2.2:8700 --server 192.168.2.1:8701 --store /data/pge-store --root /etc/pge/root.pub \
 --device pi-1 --log /var/log/endpoint.log"
+# An experiment can keep one CPU for the event loop alone (protocol 7): pge.release_cpu=N on the
+# kernel command line, which only someone who can write the boot partition can set.
+CPU="$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^pge\.release_cpu=//p')"
 
 case "$1" in
 	start)
@@ -18,6 +21,11 @@ case "$1" in
 				[ "$(cat "/proc/sys/$(echo "$key" | tr . /)" 2>/dev/null)" = "$value" ] || { echo "FAIL (sysctl $key)"; exit 1; }
 			done < "$f"
 		done
+		case "$CPU" in
+			'') ;;
+			*[!0-9]*) echo "FAIL (pge.release_cpu)"; exit 1 ;;
+			*) ARGS="$ARGS --release-cpu $CPU" ;;
+		esac
 		start-stop-daemon -S -b -m -p "$PIDFILE" -c pge -x "$DAEMON" -- $ARGS && echo OK || echo FAIL
 		;;
 	stop)
