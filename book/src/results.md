@@ -346,6 +346,27 @@ The 128-answer runs rounded times to 0.1 ms, leaving only 19-30 distinct values 
 
 </details>
 
+### What the timing data can rule out (3 Nov, analysis of earlier runs)
+
+"Not detected" is not "small". This asks how large a shift between bit-1 and bit-0 answers each fixed-release run still allows, and what such a shift could carry. Tool: `observer/shift_bound.py`. It takes a 95% bootstrap interval for the mean shift and a robust noise estimate, then applies the Gaussian channel formula at the larger end of the interval.
+
+| Run | Answers | Shift (ms) | 95% interval (ms) | Noise (ms) | At most (bit/answer) |
+|---|---|---|---|---|---|
+| Stripped image, spin, timing code (30 Oct) | 512 | -0.018 | -0.046 to +0.009 | 0.093 | 0.042 |
+| Its honest control, same labels | 512 | +0.078 | -0.081 to +0.343 | 0.227 | 0.33 |
+| Load code, protocol 4 (2 Nov) | 256 | -0.046 | -0.397 to +0.314 | 1.92 | 0.008 |
+| Three clients, protocol 5 (2 Nov) | 258 | +0.057 | -0.014 to +0.129 | 0.205 | 0.069 |
+
+At one client and 4 s per answer, 0.042 bit/answer is about 38 bits per hour. The honest control comes out higher than the signal run: one 28.6 ms late answer widens its interval. These numbers measure what the data can rule out, not leakage.
+
+The limit falls roughly as 1/n: the interval narrows as the square root of the answer count, and the bits grow with the square of the shift. Reaching 0.001 bit/answer would take about 40 times the answers, about 22 hours of Pi time at one client.
+
+<details><summary>What this does and doesn't bound</summary>
+
+It bounds the encoder each run used, read as a mean shift, under a Gaussian noise model. Another encoder may shift times further. Noise that isn't Gaussian can let a code carry more: for a given spread, Gaussian noise is the worst case for the sender. No finite run rules out a code hidden in the fine detail of the time distribution. A guaranteed bound has to come from design, for example a release stage that can't see what the checker or the server did.
+
+</details>
+
 ### Random sleeps instead of a fixed release time (a model, 2 Nov)
 
 Does adding random delay hide the server's chosen delay? In this model, it keeps leaking; fixed release gives no timing signal. This is not a device measurement.

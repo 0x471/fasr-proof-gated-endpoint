@@ -21,7 +21,7 @@ The [failure cap](leakage.md#what-a-cap-can-do) reduces leakage at a cost in ava
 
 ## Not settled by measurement
 
-- A capacity bound for arbitrary hiding methods and observers. Planted-bit rates and one binned information statistic are insufficient. Testing the estimator against known synthetic channels does not provide such a bound.
+- A capacity bound for arbitrary hiding methods and observers. Planted-bit rates and one binned information statistic are insufficient. Testing the estimator against known synthetic channels does not provide such a bound. Measurements alone can't give one: [what the timing data can rule out](results.md#what-the-timing-data-can-rule-out-3-nov-analysis-of-earlier-runs) shows how slowly that limit falls with more answers.
 - Load and several clients. One overlapping check per release was not detected; one three-client run was inconclusive. Stacked checks, flooding, longer three-client tests and outside packet captures remain undone.
 - Queue pressure. Under fixed release, a state-machine test shows that server choices do not determine which requests get `busy`. Arrival order remains open. The event loop's own delays under load remain an unresolved part of that channel.
 - The budget trade-off. Fixed release used 4 s. Honest use of that budget is measured for one and three clients; leakage under other budgets is not.
