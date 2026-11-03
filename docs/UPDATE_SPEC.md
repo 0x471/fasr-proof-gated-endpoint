@@ -1,6 +1,8 @@
 # Signed updates
 
-How the endpoint learns which model to check proofs for, and how that changes. First slice 29 Oct 2026, revised 30 Oct after an outside review; code in `endpoint/update/` (rules) and `endpoint/endpoint/src/store.rs` (applying and loading). Attacks and their tests: `docs/ATTACKS.md`, section Updates.
+The update rules choose which model the endpoint checks and how that choice can change. The first slice was added on 29 Oct 2026, then revised after outside review on 30 Oct.
+
+Rules: `endpoint/update/`. Installation and loading: `endpoint/endpoint/src/store.rs`. Evidence: the Updates section of `docs/ATTACKS.md`. Start with signing authority, then file formats, installation and the remaining limits.
 
 ## Who can do what
 - The **root key** is offline. Its public half is given to the endpoint as a file (`--root`); on a device image it is part of the read-only system. It signs only the key list.
