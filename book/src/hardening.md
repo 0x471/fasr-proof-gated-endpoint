@@ -43,14 +43,18 @@ Late, repeated and never-requested answers share a log allowance: no more than t
 
 The stock Pi has SSH and other listening services. The v1 image runs one static Rust binary as an unprivileged user on a read-only system. It has one open port, no SSH and no scheduled jobs.
 
-The firewall is built into the kernel; the endpoint refuses to start without its rules. The 2 Nov rebuild removes login prompts and locks down the kernel:
+The firewall is built into the kernel; the endpoint refuses to start without its rules. The image has no login prompts and a locked-down kernel:
 
 - No kernel modules in the image; module loading disabled at boot.
-- Kernel lockdown; no raw-memory, debugger or tracing interfaces.
-- No IPv6, radios, sound or USB.
-- Since 3 Nov: io_uring and terminal line-discipline loading are off, and the endpoint refuses to start unless every kernel setting reads back as written. Not yet booted on the Pi.
+- Kernel lockdown; no raw-memory, debugger, tracing or performance-counter interfaces.
+- No IPv6, sound, USB, raw packet sockets, io_uring, hypervisor or 32-bit programs. The radio chip is also switched off in the boot settings.
+- Freed memory is wiped, and the kernel checks its own memory lists.
+- The processor's protections against speculative-execution attacks are on. The pinned kernel left them off by default, and every image before 3 Nov ran that way.
+- The root file system is checked block by block with [dm-verity](glossary.md). A changed program stops the boot. Without secure boot, though, someone who can rewrite the card can also rewrite the hash it is checked against.
+- Memory-backed folders have size limits and can't run programs.
+- The endpoint refuses to start unless every kernel setting reads back as written.
 
-It booted on the Pi with both start-up checks passing and only port 8700 answering. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
+The 2 Nov image booted on the Pi with its start-up checks passing and only port 8700 answering. The 3 Nov night image, with everything above, has so far booted only in an emulator of the Pi 4. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
 
 ### 7. Replace the model or policy
 
