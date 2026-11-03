@@ -19,8 +19,10 @@ hash="$("$HOST_DIR/sbin/veritysetup" format --no-superblock --hash sha256 --salt
   | sed -n 's/^Root hash:[[:space:]]*//p')"
 [ "${#hash}" -eq 64 ] || { echo "veritysetup gave no root hash" >&2; exit 1; }
 # The kernel builds the checked device itself (CONFIG_DM_INIT) once both partitions exist, and mounts
-# it read-only as the root. PGE_CMDLINE_EXTRA adds options for one experiment's image.
-printf 'root=/dev/dm-0 dm-mod.waitfor=/dev/mmcblk0p2,/dev/mmcblk0p4 dm-mod.create="root,,,ro,0 %d verity 1 /dev/mmcblk0p2 /dev/mmcblk0p4 4096 4096 %d 0 sha256 %s %s" rootwait console=tty1 console=ttyAMA0,115200%s\n' \
+# it read-only as the root. mitigations=auto: this kernel (6.6.28) defines the switch for x86 only, so
+# on arm64 it starts with every speculative-execution mitigation off unless told otherwise.
+# PGE_CMDLINE_EXTRA adds options for one experiment's image.
+printf 'root=/dev/dm-0 dm-mod.waitfor=/dev/mmcblk0p2,/dev/mmcblk0p4 dm-mod.create="root,,,ro,0 %d verity 1 /dev/mmcblk0p2 /dev/mmcblk0p4 4096 4096 %d 0 sha256 %s %s" mitigations=auto rootwait console=tty1 console=ttyAMA0,115200%s\n' \
   $((size / 512)) $((size / 4096)) "$hash" "$SALT" "${PGE_CMDLINE_EXTRA:+ $PGE_CMDLINE_EXTRA}" \
   > "$BINARIES_DIR/rpi-firmware/cmdline.txt"
 

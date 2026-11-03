@@ -85,6 +85,7 @@ table="$(sed -n 's/.*dm-mod.create="\([^"]*\)".*/\1/p' "$IMG/rpi-firmware/cmdlin
 read -r _ _ _ _ _ _ _ _ blocks _ _ roothash salt <<<"${table#*,ro,}"
 grep -q '^root=/dev/dm-0 ' "$IMG/rpi-firmware/cmdline.txt" && [ -n "$salt" ] || { echo "root isn't mounted through dm-verity" >&2; exit 1; }
 "$WORK/out/host/sbin/dumpe2fs" -h "$IMG/rootfs.ext4" 2>/dev/null | grep -q '^Block size: *4096$' || { echo "root file system doesn't use 4 KiB blocks" >&2; exit 1; }
+grep -q ' mitigations=auto ' "$IMG/rpi-firmware/cmdline.txt" || { echo "CPU mitigations are left off" >&2; exit 1; }
 "$WORK/out/host/sbin/veritysetup" verify --no-superblock --hash sha256 --salt "$salt" --data-blocks "$blocks" \
   --data-block-size 4096 --hash-block-size 4096 "$IMG/rootfs.ext4" "$IMG/verity.img" "$roothash" \
   || { echo "verity tree doesn't match the root image" >&2; exit 1; }
