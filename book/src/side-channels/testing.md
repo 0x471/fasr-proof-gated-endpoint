@@ -3,7 +3,7 @@
 > **In short**
 > - The server hides a known message; an observer outside tries to read it back.
 > - Statistical tests and honest control runs help distinguish signals from noise.
-> - "Not detected" means this test missed it, not that nothing leaks.
+> - "Not detected" means no signal was found by this test, not proof that nothing leaks.
 
 ## Plant a known message
 
@@ -34,7 +34,7 @@ Small effects need statistics. Three tools do most of the work:
 - Held-out decoder. It learns a threshold and which side means 1 on half the answers, then scores the other half. We swap the halves and keep the better score. Each shuffle repeats that whole procedure, so the comparison accounts for choosing the better half.
 - Honest control. We repeat the analysis on a run where the server hid nothing. A signal there warns of chance, analysis errors or environmental patterns, rather than the intended encoding.
 
-We also report a mutual-information estimate: how many bits the binned reply time reveals about the planted bit. It describes the data; it is not a limit on what an attacker could do.
+We also group reply times into ranges and estimate how much knowing the range tells us about the planted bit. This is a mutual-information estimate. It describes the data; it is not a limit on what an attacker could do.
 
 ## Decide the rules before the data
 
