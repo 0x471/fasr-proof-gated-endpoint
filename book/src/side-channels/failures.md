@@ -2,7 +2,7 @@
 
 > **In short**
 > - The server can make chosen answers fail; which ones fail spells the message.
-> - No release rule can stop this, because a deliberate failure looks like a real fault.
+> - Release timing alone does not hide which answers fail.
 > - A failure cap limits the channel with a counted bound, at a cost in availability.
 
 ## How the attack works
@@ -58,6 +58,8 @@ For N replies, the simplified status sequence has N + 1 possibilities: no failur
 A registered test on the Pi compared both:
 
 {{#include ../results.md:cap-vs-halt}}
+
+In the halt row, "nothing was answered" means no successful answers; `unavailable` replies continue.
 
 Each capped run matched the reference model reply for reply. No answers were lost in the single honest control run. That does not show that honest faults could never trigger a cooldown. Full conditions are in [Measurements](../results.md#failure-cap-versus-stopping-2-nov-protocol-3).
 
