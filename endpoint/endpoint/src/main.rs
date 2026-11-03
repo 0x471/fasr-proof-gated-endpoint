@@ -7,10 +7,14 @@ mod store;
 use pge_verify::{Bundle, Pins, Verdict};
 use std::{
     io::{self, Write},
+    path::PathBuf,
     process::{Command, ExitCode},
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
+
+/// The endpoint's own binary, found before it is confined (finding it later needs /proc).
+pub static EXE: OnceLock<PathBuf> = OnceLock::new();
 
 fn verify_job(bundle: Arc<Bundle>, data: Vec<u8>, budget: Duration, proof_bytes: usize) -> Verdict {
     let start = Instant::now();
@@ -18,7 +22,7 @@ fn verify_job(bundle: Arc<Bundle>, data: Vec<u8>, budget: Duration, proof_bytes:
     if bundle.write_job(&data, &mut input).is_err() {
         return Verdict::Error;
     }
-    let Ok(exe) = std::env::current_exe() else {
+    let Some(exe) = EXE.get() else {
         return Verdict::Error;
     };
     let Some(left) = budget.checked_sub(start.elapsed()).filter(|d| !d.is_zero()) else {

@@ -447,6 +447,9 @@ pub fn run(mut config: Config) -> Result<(), String> {
     let mut delay = Duration::from_millis(500);
     let mut was_connected = false;
     let mut release_at: Option<u64> = None;
+    let exe = std::env::current_exe().map_err(|_| "own binary")?;
+    crate::process::confine(&exe).map_err(|e| format!("confine: {e}"))?;
+    let _ = crate::EXE.set(exe);
     loop {
         if was_connected && endpoint.server.is_none() {
             retry = Instant::now() + delay;

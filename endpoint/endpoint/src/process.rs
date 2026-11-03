@@ -229,102 +229,301 @@ pub fn limits(cpu: u64) -> io::Result<()> {
     Ok(())
 }
 
+/// A seccomp allow-list: a system call from another architecture kills the process, anything not
+/// allowed fails with EPERM, and clone3 fails with ENOSYS so libc falls back to clone, whose flags
+/// a filter can read.
+#[cfg(target_os = "linux")]
+struct Filter(Vec<libc::sock_filter>);
+
+#[cfg(target_os = "linux")]
+impl Filter {
+    #[cfg(target_arch = "aarch64")]
+    const ARCH: u32 = 0xc000_00b7;
+    #[cfg(target_arch = "x86_64")]
+    const ARCH: u32 = 0xc000_003e;
+    const ALLOW: u32 = libc::SECCOMP_RET_ALLOW;
+    const DENY: u32 = libc::SECCOMP_RET_ERRNO | libc::EPERM as u32;
+    const NOSYS: u32 = libc::SECCOMP_RET_ERRNO | libc::ENOSYS as u32;
+    const KILL: u32 = 0x8000_0000;
+
+    fn op(code: u32, k: u32, jt: u8, jf: u8) -> libc::sock_filter {
+        libc::sock_filter {
+            code: code as u16,
+            jt,
+            jf,
+            k,
+        }
+    }
+    fn load(offset: u32) -> libc::sock_filter {
+        Self::op(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, offset, 0, 0)
+    }
+    fn ret(k: u32) -> libc::sock_filter {
+        Self::op(libc::BPF_RET | libc::BPF_K, k, 0, 0)
+    }
+    fn eq(k: u32, jt: u8, jf: u8) -> libc::sock_filter {
+        Self::op(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, k, jt, jf)
+    }
+    // The low word of argument i; every argument checked here is a 32-bit int in the kernel.
+    fn arg(i: u32) -> libc::sock_filter {
+        Self::load(16 + 8 * i)
+    }
+
+    fn new() -> Self {
+        let mut f = Filter(vec![
+            Self::load(4),
+            Self::eq(Self::ARCH, 1, 0),
+            Self::ret(Self::KILL),
+            Self::load(0),
+        ]);
+        f.0.extend([
+            Self::eq(libc::SYS_clone3 as u32, 0, 1),
+            Self::ret(Self::NOSYS),
+        ]);
+        f
+    }
+    // Each block below starts with the call number still loaded and always returns.
+    fn allow(mut self, nrs: &[libc::c_long]) -> Self {
+        for &nr in nrs {
+            self.0
+                .extend([Self::eq(nr as u32, 0, 1), Self::ret(Self::ALLOW)]);
+        }
+        self
+    }
+    #[cfg_attr(not(target_env = "musl"), allow(dead_code))]
+    fn allow_if(mut self, nr: libc::c_long, arg: u32, values: &[u32]) -> Self {
+        let n = values.len() as u8;
+        self.0
+            .extend([Self::eq(nr as u32, 0, n + 3), Self::arg(arg)]);
+        for (i, &v) in values.iter().enumerate() {
+            self.0.push(Self::eq(v, n - i as u8, 0));
+        }
+        self.0
+            .extend([Self::ret(Self::DENY), Self::ret(Self::ALLOW)]);
+        self
+    }
+    fn allow_unless(mut self, nr: libc::c_long, arg: u32, bits: u32) -> Self {
+        self.0.extend([
+            Self::eq(nr as u32, 0, 4),
+            Self::arg(arg),
+            Self::op(libc::BPF_JMP | libc::BPF_JSET | libc::BPF_K, bits, 1, 0),
+            Self::ret(Self::ALLOW),
+            Self::ret(Self::DENY),
+        ]);
+        self
+    }
+    fn allow_threads_only(mut self) -> Self {
+        self.0.extend([
+            Self::eq(libc::SYS_clone as u32, 0, 4),
+            Self::arg(0),
+            Self::op(
+                libc::BPF_JMP | libc::BPF_JSET | libc::BPF_K,
+                libc::CLONE_THREAD as u32,
+                0,
+                1,
+            ),
+            Self::ret(Self::ALLOW),
+            Self::ret(Self::DENY),
+        ]);
+        self
+    }
+    fn no_executable_memory(self) -> Self {
+        self.allow_unless(libc::SYS_mmap, 2, libc::PROT_EXEC as u32)
+            .allow_unless(libc::SYS_mprotect, 2, libc::PROT_EXEC as u32)
+    }
+
+    fn install(mut self) -> io::Result<()> {
+        self.0.push(Self::ret(Self::DENY));
+        let fprog = libc::sock_fprog {
+            len: u16::try_from(self.0.len()).map_err(|_| io::Error::other("filter size"))?,
+            filter: self.0.as_mut_ptr(),
+        };
+        // The program outlives both calls; the kernel copies the filter when it is installed.
+        unsafe {
+            if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0
+                || libc::prctl(
+                    libc::PR_SET_SECCOMP,
+                    libc::SECCOMP_MODE_FILTER,
+                    &fprog as *const libc::sock_fprog,
+                ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// After `limits`, the checker only computes on what it reads from stdin, so it is confined to
 /// the system calls it was traced making (memory, threads, futexes, stdin and stdout). Anything
 /// else (opening files, sockets, exec, ptrace, new processes, executable memory) fails with
 /// EPERM; a system call from another architecture kills the process.
 #[cfg(target_os = "linux")]
 pub fn sandbox() -> io::Result<()> {
-    #[cfg(target_arch = "aarch64")]
-    const ARCH: u32 = 0xc000_00b7;
-    #[cfg(target_arch = "x86_64")]
-    const ARCH: u32 = 0xc000_003e;
-    const KILL: u32 = 0x8000_0000;
-    const ALLOW: u32 = libc::SECCOMP_RET_ALLOW;
-    const DENY: u32 = libc::SECCOMP_RET_ERRNO | libc::EPERM as u32;
-    const NOSYS: u32 = libc::SECCOMP_RET_ERRNO | libc::ENOSYS as u32;
-    const NR: u32 = 0;
-    const ARGS: u32 = 16;
-    let op = |code: u32, k: u32| libc::sock_filter {
-        code: code as u16,
-        jt: 0,
-        jf: 0,
-        k,
-    };
-    let jump = |code: u32, k: u32, jt: u8, jf: u8| libc::sock_filter {
-        code: code as u16,
-        jt,
-        jf,
-        k,
-    };
-    let load = |offset: u32| op(libc::BPF_LD | libc::BPF_W | libc::BPF_ABS, offset);
-    let ret = |k: u32| op(libc::BPF_RET | libc::BPF_K, k);
-    let eq = |k: u32, jt: u8, jf: u8| jump(libc::BPF_JMP | libc::BPF_JEQ | libc::BPF_K, k, jt, jf);
-    let set =
-        |k: u32, jt: u8, jf: u8| jump(libc::BPF_JMP | libc::BPF_JSET | libc::BPF_K, k, jt, jf);
-    let mut prog = vec![load(4), eq(ARCH, 1, 0), ret(KILL), load(NR)];
-    // glibc falls back to clone when clone3 is missing; clone3's flags can't be inspected here.
-    prog.extend([eq(libc::SYS_clone3 as u32, 0, 1), ret(NOSYS)]);
-    prog.extend([
-        eq(libc::SYS_clone as u32, 0, 4),
-        load(ARGS),
-        set(libc::CLONE_THREAD as u32, 0, 1),
-        ret(ALLOW),
-        ret(DENY),
-    ]);
-    for nr in [libc::SYS_mmap, libc::SYS_mprotect] {
-        prog.extend([
-            eq(nr as u32, 0, 4),
-            load(ARGS + 16),
-            set(libc::PROT_EXEC as u32, 1, 0),
-            ret(ALLOW),
-            ret(DENY),
-        ]);
-    }
-    for nr in [
-        libc::SYS_read,
-        libc::SYS_write,
-        libc::SYS_munmap,
-        libc::SYS_mremap,
-        libc::SYS_brk,
-        libc::SYS_madvise,
-        libc::SYS_futex,
-        libc::SYS_sched_yield,
-        libc::SYS_sched_getaffinity,
-        libc::SYS_rt_sigprocmask,
-        libc::SYS_rt_sigreturn,
-        libc::SYS_sigaltstack,
-        libc::SYS_getrandom,
-        libc::SYS_gettid,
-        libc::SYS_set_robust_list,
-        libc::SYS_rseq,
-        libc::SYS_exit,
-        libc::SYS_exit_group,
-    ] {
-        prog.extend([eq(nr as u32, 0, 1), ret(ALLOW)]);
-    }
-    prog.push(ret(DENY));
-    let fprog = libc::sock_fprog {
-        len: u16::try_from(prog.len()).map_err(|_| io::Error::other("filter size"))?,
-        filter: prog.as_mut_ptr(),
-    };
-    // prog outlives both calls; the kernel copies the filter when it is installed.
-    unsafe {
-        if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0
-            || libc::prctl(
-                libc::PR_SET_SECCOMP,
-                libc::SECCOMP_MODE_FILTER,
-                &fprog as *const libc::sock_fprog,
-            ) != 0
-        {
-            return Err(io::Error::last_os_error());
-        }
-    }
-    Ok(())
+    Filter::new()
+        .allow_threads_only()
+        .no_executable_memory()
+        .allow(&[
+            libc::SYS_read,
+            libc::SYS_write,
+            libc::SYS_munmap,
+            libc::SYS_mremap,
+            libc::SYS_brk,
+            libc::SYS_madvise,
+            libc::SYS_futex,
+            libc::SYS_sched_yield,
+            libc::SYS_sched_getaffinity,
+            libc::SYS_rt_sigprocmask,
+            libc::SYS_rt_sigreturn,
+            libc::SYS_sigaltstack,
+            libc::SYS_getrandom,
+            libc::SYS_gettid,
+            libc::SYS_set_robust_list,
+            libc::SYS_rseq,
+            libc::SYS_exit,
+            libc::SYS_exit_group,
+        ])
+        .install()
 }
 
 #[cfg(not(target_os = "linux"))]
 pub fn sandbox() -> io::Result<()> {
+    Ok(())
+}
+
+/// Confines the running endpoint once its sockets, log and model files are open. Landlock lets it
+/// open no file and execute only its own binary (to start checkers); descriptors it already holds
+/// keep working. A seccomp allow-list then limits it to the calls it needs. Checkers inherit both
+/// and add their own filter. The endpoint refuses to run if either can't be applied.
+/// Only the static musl build (the device's) is confined: a dynamically linked checker would need
+/// the loader, which opens libraries and maps them executable.
+#[cfg(all(target_os = "linux", target_env = "musl"))]
+pub fn confine(exe: &std::path::Path) -> io::Result<()> {
+    use std::os::{
+        fd::{FromRawFd, OwnedFd},
+        unix::ffi::OsStrExt,
+    };
+    // The same numbers on aarch64 and x86_64.
+    const CREATE: libc::c_long = 444;
+    const ADD_RULE: libc::c_long = 445;
+    const RESTRICT: libc::c_long = 446;
+    const VERSION: u32 = 1;
+    const PATH_BENEATH: u32 = 1;
+    const EXECUTE: u64 = 1;
+    const READ_FILE: u64 = 1 << 2;
+    #[repr(C)]
+    struct Ruleset {
+        handled_fs: u64,
+    }
+    #[repr(C, packed)]
+    struct PathBeneath {
+        allowed: u64,
+        parent: i32,
+    }
+    let path = std::ffi::CString::new(exe.as_os_str().as_bytes()).map_err(io::Error::other)?;
+    // Raw system calls on values that live until the calls return; every fd is owned once made.
+    unsafe {
+        let abi = libc::syscall(CREATE, std::ptr::null::<Ruleset>(), 0usize, VERSION);
+        if abi < 1 {
+            return Err(io::Error::other("landlock is not available"));
+        }
+        // Every filesystem right this kernel's Landlock knows, so whatever isn't granted is refused.
+        let handled_fs = match abi {
+            1 => (1 << 13) - 1,
+            2 => (1 << 14) - 1,
+            3 | 4 => (1 << 15) - 1,
+            _ => (1 << 16) - 1,
+        };
+        let attr = Ruleset { handled_fs };
+        let fd = libc::syscall(CREATE, &attr, std::mem::size_of::<Ruleset>(), 0u32);
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let ruleset = OwnedFd::from_raw_fd(fd as i32);
+        let fd = libc::open(path.as_ptr(), libc::O_PATH | libc::O_CLOEXEC);
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let binary = OwnedFd::from_raw_fd(fd);
+        let rule = PathBeneath {
+            allowed: EXECUTE | READ_FILE,
+            parent: binary.as_raw_fd(),
+        };
+        if libc::syscall(ADD_RULE, ruleset.as_raw_fd(), PATH_BENEATH, &rule, 0u32) != 0
+            || libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0
+            || libc::syscall(RESTRICT, ruleset.as_raw_fd(), 0u32) != 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    // What the event loop, its connect and check threads and a checker (which inherits this filter
+    // across exec) were traced making, plus the exits, sleeps and the kill at a deadline.
+    #[cfg(target_arch = "x86_64")]
+    let arch = [libc::SYS_poll];
+    #[cfg(not(target_arch = "x86_64"))]
+    let arch: [libc::c_long; 0] = [];
+    Filter::new()
+        .allow_if(libc::SYS_socket, 0, &[libc::AF_INET as u32])
+        .allow_if(libc::SYS_ioctl, 1, &[libc::FIONBIO as u32])
+        .allow_if(
+            libc::SYS_prctl,
+            0,
+            &[
+                libc::PR_SET_NO_NEW_PRIVS as u32,
+                libc::PR_SET_SECCOMP as u32,
+            ],
+        )
+        .no_executable_memory()
+        .allow(&arch)
+        .allow(&[
+            // network and pipes
+            libc::SYS_accept4,
+            libc::SYS_connect,
+            libc::SYS_recvfrom,
+            libc::SYS_sendto,
+            libc::SYS_read,
+            libc::SYS_write,
+            libc::SYS_close,
+            libc::SYS_ppoll,
+            libc::SYS_setsockopt,
+            libc::SYS_getsockopt,
+            libc::SYS_fcntl,
+            libc::SYS_pipe2,
+            // threads, and checkers started with posix_spawn (exec is limited by Landlock)
+            libc::SYS_clone,
+            libc::SYS_dup3,
+            libc::SYS_setpgid,
+            libc::SYS_execve,
+            libc::SYS_wait4,
+            libc::SYS_kill,
+            libc::SYS_set_tid_address,
+            libc::SYS_prlimit64,
+            // memory, signals, time and exit
+            libc::SYS_munmap,
+            libc::SYS_mremap,
+            libc::SYS_brk,
+            libc::SYS_madvise,
+            libc::SYS_futex,
+            libc::SYS_sched_yield,
+            libc::SYS_rt_sigaction,
+            libc::SYS_rt_sigprocmask,
+            libc::SYS_rt_sigreturn,
+            libc::SYS_sigaltstack,
+            libc::SYS_getrandom,
+            libc::SYS_getpid,
+            libc::SYS_gettid,
+            libc::SYS_tgkill,
+            libc::SYS_clock_gettime,
+            libc::SYS_clock_nanosleep,
+            libc::SYS_nanosleep,
+            libc::SYS_restart_syscall,
+            libc::SYS_exit,
+            libc::SYS_exit_group,
+        ])
+        .install()
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "musl")))]
+pub fn confine(_exe: &std::path::Path) -> io::Result<()> {
     Ok(())
 }
 
@@ -401,6 +600,71 @@ mod tests {
         let mut status = 0;
         assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
         assert!(libc::WIFEXITED(status), "sandboxed child died: {status:#x}");
+        assert_eq!(libc::WEXITSTATUS(status), 0, "check that failed");
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "musl"))]
+    #[test]
+    fn confined_endpoint_opens_nothing_and_runs_only_itself() {
+        let exe = std::env::current_exe().unwrap();
+        // Raw system calls only between fork and _exit: the test harness has other threads.
+        let pid = unsafe { libc::fork() };
+        assert!(pid >= 0);
+        if pid == 0 {
+            let code = unsafe {
+                let errno = || *libc::__errno_location();
+                // If exec got through, the child would exit 9 instead of reporting a check.
+                let argv = [
+                    c"/bin/sh".as_ptr(),
+                    c"-c".as_ptr(),
+                    c"exit 9".as_ptr(),
+                    std::ptr::null(),
+                ];
+                let env = [std::ptr::null::<libc::c_char>()];
+                if confine(&exe).is_err() {
+                    1
+                } else if libc::open(c"/".as_ptr(), libc::O_RDONLY) != -1 || errno() != libc::EPERM
+                {
+                    2
+                } else if libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0) != -1
+                    || errno() != libc::EPERM
+                {
+                    3
+                } else if libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) < 0 {
+                    4
+                } else if libc::execve(argv[0], argv.as_ptr(), env.as_ptr()) != -1
+                    || errno() != libc::EACCES
+                {
+                    // execve passes the filter; Landlock refuses any binary but the endpoint's own.
+                    5
+                } else if libc::mmap(
+                    std::ptr::null_mut(),
+                    4096,
+                    libc::PROT_READ | libc::PROT_EXEC,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                ) != libc::MAP_FAILED
+                {
+                    6
+                } else if libc::ioctl(0, libc::TIOCGWINSZ, std::ptr::null_mut::<libc::c_void>())
+                    != -1
+                    || errno() != libc::EPERM
+                {
+                    7
+                } else if libc::ptrace(libc::PTRACE_TRACEME, 0, 0, 0) != -1
+                    || errno() != libc::EPERM
+                {
+                    8
+                } else {
+                    0
+                }
+            };
+            unsafe { libc::_exit(code) };
+        }
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(pid, &mut status, 0) }, pid);
+        assert!(libc::WIFEXITED(status), "confined child died: {status:#x}");
         assert_eq!(libc::WEXITSTATUS(status), 0, "check that failed");
     }
     fn shell(script: &str, ms: u64) -> Verdict {
