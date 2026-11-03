@@ -18,7 +18,7 @@ from test_service import FakeProver
 from prover.server import Server
 
 
-async def start(binary, bundle, work, extra=(), nofile=None):
+async def start(binary, bundle, work, extra=(), nofile=None, log=None):
     work.mkdir()
     for name, source in (("settings.json", bundle.settings), ("vk.key", bundle.vk), ("kzg.srs", bundle.srs)):
         shutil.copy(source, work / name)
@@ -27,7 +27,7 @@ async def start(binary, bundle, work, extra=(), nofile=None):
     port, logpath = free_port(), work / "endpoint.log"
     args = [str(binary), "--listen", f"127.0.0.1:{port}", "--server", f"127.0.0.1:{upstream.sockets[0].getsockname()[1]}",
             "--bundle", str(work), "--pins", str(ROOT / "device/tiny.sha256"), "--domain", str(TINY / "domain.json"),
-            "--proof-bytes", "3072", "--log", str(logpath), *extra]
+            "--proof-bytes", "3072", "--log", str(log or logpath), *extra]
     limit = (lambda: resource.setrlimit(resource.RLIMIT_NOFILE, (nofile, nofile))) if nofile else None
     proc = await asyncio.create_subprocess_exec(*args, stderr=asyncio.subprocess.PIPE, preexec_fn=limit)
     for _ in range(100):
@@ -187,6 +187,33 @@ def test_release_cpu_must_leave_another_cpu(rust_bin, tiny_bundle, tmp_path):  #
                                                             extra=("--release-cpu", "1023"))
         try:
             assert await asyncio.wait_for(proc.wait(), 5) != 0
+        finally:
+            await stop(proc, upstream, server)
+    asyncio.run(go())
+
+
+@pytest.mark.skipif(not os.path.exists("/dev/full"), reason="needs /dev/full (Linux)")
+def test_a_log_that_cannot_be_written_does_not_stop_answers(rust_bin, tiny_bundle, tmp_path):  # noqa: F811
+    async def go():
+        proc, port, _, upstream, server = await start(rust_bin, tiny_bundle, tmp_path / "rs", log="/dev/full")
+        try:
+            wire = Wire.for_spec(tiny_bundle.spec)
+            for cid in (1, 2, 3):
+                reply, _ = await ask(port, wire, cid)
+                assert reply["ok"] and reply["id"] == cid
+            assert proc.returncode is None
+        finally:
+            await stop(proc, upstream, server)
+    asyncio.run(go())
+
+
+def test_concurrent_clients_each_get_their_own_answer(rust_bin, tiny_bundle, tmp_path):  # noqa: F811
+    async def go():
+        proc, port, _, upstream, server = await start(rust_bin, tiny_bundle, tmp_path / "rs")
+        try:
+            wire = Wire.for_spec(tiny_bundle.spec)
+            replies = await asyncio.gather(*(ask(port, wire, cid, timeout=30) for cid in range(1, 9)))
+            assert [(r["id"], r["ok"]) for r, _ in replies] == [(cid, True) for cid in range(1, 9)]
         finally:
             await stop(proc, upstream, server)
     asyncio.run(go())
