@@ -160,6 +160,38 @@ def test_the_running_endpoint_is_confined(rust_bin, tiny_bundle, tmp_path):  # n
     asyncio.run(go())
 
 
+@pytest.mark.skipif(not hasattr(os, "sched_getaffinity") or len(os.sched_getaffinity(0)) < 2,
+                    reason="needs Linux and two CPUs")
+def test_release_cpu_keeps_one_cpu_for_the_event_loop(rust_bin, tiny_bundle, tmp_path):  # noqa: F811
+    cpu = max(os.sched_getaffinity(0))
+
+    async def go():
+        proc, port, logpath, upstream, server = await start(rust_bin, tiny_bundle, tmp_path / "rs",
+                                                            extra=("--release-cpu", str(cpu)))
+        try:
+            assert proc.returncode is None
+            status = dict(line.split(":", 1) for line in open(f"/proc/{proc.pid}/status") if ":" in line)
+            assert status["Cpus_allowed_list"].strip() == str(cpu)
+            # The check thread moves to the other CPUs first; if it couldn't, the answer would fail.
+            reply, _ = await ask(port, Wire.for_spec(tiny_bundle.spec))
+            assert reply["ok"]
+        finally:
+            await stop(proc, upstream, server)
+    asyncio.run(go())
+
+
+@pytest.mark.skipif(not hasattr(os, "sched_getaffinity"), reason="needs Linux")
+def test_release_cpu_must_leave_another_cpu(rust_bin, tiny_bundle, tmp_path):  # noqa: F811
+    async def go():
+        proc, port, logpath, upstream, server = await start(rust_bin, tiny_bundle, tmp_path / "rs",
+                                                            extra=("--release-cpu", "1023"))
+        try:
+            assert await asyncio.wait_for(proc.wait(), 5) != 0
+        finally:
+            await stop(proc, upstream, server)
+    asyncio.run(go())
+
+
 def cpu_seconds(pid):
     """CPU time used by a process so far, from ps ([[dd-]hh:]mm:ss[.ff], Linux and macOS)."""
     out = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()

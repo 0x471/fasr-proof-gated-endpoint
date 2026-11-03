@@ -670,7 +670,10 @@ mod tests {
                     std::ptr::null(),
                 ];
                 let env = [std::ptr::null::<libc::c_char>()];
-                if confine(&exe).is_err() {
+                let mut cpus: libc::cpu_set_t = std::mem::zeroed();
+                let size = std::mem::size_of::<libc::cpu_set_t>();
+                let parent = libc::getppid();
+                if libc::sched_getaffinity(0, size, &mut cpus) != 0 || confine(&exe).is_err() {
                     1
                 } else if libc::open(c"/".as_ptr(), libc::O_RDONLY) != -1 || errno() != libc::EPERM
                 {
@@ -705,6 +708,11 @@ mod tests {
                     || errno() != libc::EPERM
                 {
                     8
+                } else if libc::sched_setaffinity(0, size, &cpus) != 0 {
+                    // A thread may move itself between CPUs (--release-cpu), not anyone else.
+                    9
+                } else if libc::sched_setaffinity(parent, size, &cpus) != -1 || errno() != libc::EPERM {
+                    10
                 } else {
                     0
                 }
