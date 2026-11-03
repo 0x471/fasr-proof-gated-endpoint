@@ -48,3 +48,4 @@ done
 Each run takes about 17-20 minutes (256 answers at 4 s).
 
 ## Notes before the first run
+- 3 Nov, before any run: the experiment image is sha256 `36b18e8489d5bc3e12df0fc37c573f72af2f64e472f52a1f1e476fc04c1003c9`: the v1.1 build of `a438202`'s `image/` with the endpoint built from `e533f8d` (static musl, sha256 `788e3262...9818`, not a CI build) and the spin-0 policy. Its Linux tests passed, including a mutant without the filter's `sched_setaffinity` rule, which the placement test caught.
