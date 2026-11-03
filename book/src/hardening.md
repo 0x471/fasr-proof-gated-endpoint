@@ -1,43 +1,79 @@
 # How hard the endpoint is to attack
 
 > **In short**
-> - The endpoint is built in layers: check only what it computed itself, accept only one exact message format, contain the proof checker, and run on a system with almost nothing else on it.
-> - {{#include ../../docs/ATTACKS.md:summary}}
-> - Code reviews found six real bugs: five in the code that holds answers back until their turn, one that let the server write log records without limit; all fixed, each now covered by a test that fails on the old code.
+> - Each layer limits what an attacker can send, change or reach.
+> - Review found six bugs. All were fixed, with tests that fail on the old code.
+> - The checker still trusts the proof system's verdict. Physical protection and secure boot remain outside the demonstrated result.
 
 ## The layers
 
-**1. Check only what the endpoint computed itself.** The endpoint never trusts the server's account of the question or the model. It encodes the question itself, pins the approved model's files by hash, fixes the proof length, and reads the output only from the proven values. See [How the endpoint works](tour.md#how-a-proof-is-tied-to-the-question).
+### 1. Change the answer or model
 
-**2. Accept one exact message format.** Questions, forwarded questions and replies have one fixed size and layout for the model in use. The server's answer is a fixed part plus the proof, which may be up to 64 KiB on the wire and must then be exactly the pinned length. Anything else is rejected: oversized or truncated messages, wrong types, numbers that aren't finite. A fuzz test throws 10,500 random and mutated messages at each parser.
+The endpoint encodes the question itself and pins the approved model's files by [hash](glossary.md). It fixes the proof length and reads outputs only from proven values. The [binding rules](tour.md#how-a-proof-is-tied-to-the-question) explain each check.
 
-**3. Contain the proof checker.** The checker is a separate program with hard limits: 256 MiB of memory (enforced on Linux, which the Pi runs), CPU time up to the deadline, no file growth, 64 open files, no crash dumps. It is killed if it runs past its deadline or prints too much. A checker that hits a limit counts as a failed check, never as a pass. In the Rust endpoint on Linux, the checker also runs under a system-call allow-list once its limits are set: it can't open files or network connections, run programs, start processes or map executable memory, so a bug in the proof code can't reach anything outside it (it could still print a wrong verdict).
+### 2. Send a malformed message
 
-**4. Say nothing the server chose.** Users only ever see the proven output or a fixed error (`unavailable`, or `bad_request` for a well-formed question the model can't answer); a malformed message just closes the connection. The endpoint's log uses a fixed vocabulary, never text from the server; it still records a counter, a hash of the question and the time taken, and which events happen and when still follow the server. The server can't make it write more records than there are questions: answers that are late, repeated or for a question never asked are logged, but never more of them in total than questions asked so far; one more ends the link (K51).
+Questions, forwarded questions and replies have one fixed layout for the approved model. A server answer adds a proof: up to 64 KiB on the wire, then checked against its exact pinned length.
 
-**5. Run on a minimal system (v1).** The standard Pi system has ssh and other services listening. The v1 image is built for the endpoint alone: one static Rust binary running as an unprivileged user, a read-only system, one open port behind a firewall built into the kernel (the endpoint won't start without its rules), no ssh and no scheduled jobs. The 2 Nov rebuild also locks the kernel down (no kernel modules on the image and module loading switched off at boot, kernel lockdown, no raw memory, debugger or tracing interfaces, nothing for IPv6, radios, sound or USB) and removes every login prompt; on the Pi (2 Nov) it booted, both start-up checks passed and only port 8700 answered ([Measurements](results.md)).
+Wrong types, non-finite numbers, oversized messages and truncated messages are refused. A [fuzz test](glossary.md) tries 10,500 random and mutated messages per parser.
 
-**6. Accept only signed changes.** The model files and the release policy come from a signed update: the endpoint refuses rollbacks, replays, updates for another device and unknown or revoked keys (catalogue rows K36-K48). The update files' parsers and the forward-only rule are also fuzzed. Still planned (v2): secure boot, so the board starts only a system we signed, and a counter in a TPM so a whole older copy of the store can't be restored (K43).
+### 3. Take over the proof checker
+
+Each check runs in a separate process with [resource limits](tour.md#the-checker): 256 MiB of memory on Linux, bounded CPU time and 64 open files. File growth and crash dumps are disabled. A deadline or excessive output kills the process; hitting a limit never counts as a pass.
+
+On Linux, the Rust checker then installs a system-call allow-list. It cannot open files or sockets, run programs, start processes or map executable memory. This contains a compromised checker, but cannot detect a wrong verdict: the checker could still say a bad proof passed.
+
+### 4. Write chosen text into replies or logs
+
+Users receive proven output or a fixed error. An impossible but well-formed question gets `bad_request`; a server failure gets `unavailable`. Malformed user messages close the connection.
+
+Logs use fixed words, never server text. They still record a counter, a question hash and elapsed time. The server influences which events occur and when.
+
+Late, repeated and never-requested answers share a log allowance: no more than the number of questions issued. Exceeding it drops the link. See [device-output attacks](attacks.md#the-devices-own-outputs) for the tested rule and remaining client-driven log growth.
+
+### 5. Reach the operating system
+
+The stock Pi has SSH and other listening services. The v1 image runs one static Rust binary as an unprivileged user on a read-only system. It has one open port, no SSH and no scheduled jobs.
+
+The firewall is built into the kernel; the endpoint refuses to start without its rules. The 2 Nov rebuild removes login prompts and locks down the kernel:
+
+- No kernel modules in the image; module loading disabled at boot.
+- Kernel lockdown; no raw-memory, debugger or tracing interfaces.
+- No IPv6, radios, sound or USB.
+
+It booted on the Pi with both start-up checks passing and only port 8700 answering. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
+
+### 6. Replace the model or policy
+
+Signed updates supply model files and release policy. They reject older or repeated updates, updates for another device, and unknown or revoked keys. Their parsers and forward-only rule are fuzzed.
+
+Restoring an entire older store is still possible. A [TPM](glossary.md) counter to prevent that, and secure boot to require a signed system, are planned for v2. See [update attacks](attacks.md#updates).
 
 ## Catalogued scenarios
 
+{{#include ../../docs/ATTACKS.md:summary}}
+
 {{#include ../../docs/ATTACKS.md:outcomes}}
 
-Every scenario has a row in the [Attack catalogue](attacks.md) with its result and its evidence, or says that there is none yet.
+The [catalogue](attacks.md) gives each scenario's result and evidence, or says that evidence is missing. "Stopped" means the attack was refused or neutralised in a test or run, not that the device stopped working.
 
 ## Bugs found by review
 
-Independent reviews of the code (run with AI tools) found six real bugs, five of them in the code that holds answers back until it is their turn:
+Independent reviews of the code (run with AI tools) found six real bugs. Five affected answers held until their release turn.
 
-- an answer that was already checked could still leave after the endpoint had decided to stop answering;
-- in arrival order, under a stalled event loop, a checked answer could leave after its own deadline;
-- answers waiting their turn didn't count towards the endpoint's capacity limit, so the queue could grow without bound;
-- with fixed-time release and the spin option, a later answer could overtake an earlier one whose deadline had nearly passed, so the server could choose the order of two failures again;
-- with spin, a disconnect or halt that decided many answers at once chained one busy-wait per answer, stalling the endpoint for tens of milliseconds;
-- every late, repeated or never-asked-for answer wrote a log record, without limit, and on the v1 image the log is kept in memory, so a server could fill it (and hide what it did next) or use up memory.
+| Bug | Fix or evidence |
+|---|---|
+| A checked answer could leave after a halt | Re-check when releasing |
+| In arrival order, a stalled event loop could release a checked answer past its deadline | Re-check the deadline when releasing |
+| Held answers did not count towards capacity; the queue could grow without bound | Count held answers |
+| Spin let a later answer overtake an earlier one near its deadline, restoring a choice of error order | One ordered queue; only the next answer spins |
+| A disconnect or halt chained busy-waits for many answers, stalling the loop for tens of milliseconds | Schedule the pump; at most one spin per run |
+| Unexpected answers wrote unlimited logs, filling the image's RAM log, hiding later events or exhausting memory | Bound those records by issued questions |
 
-Each now has a test that fails on the old code (catalogue rows K30, K31, K33, K35 and K51).
+Each fix has a test that fails on the old code. Evidence is in the [client/device rows](attacks.md#the-client-side-and-the-device-itself) and [log row](attacks.md#the-devices-own-outputs).
 
-## What isn't hardened yet
+## What remains
 
-Both sides still share one cable, so nothing physically forces the server's traffic through the endpoint; there is no secure boot; a whole older copy of the update store is accepted (K43); a new update needs a new image or an offline step; the verifier's own verdict is trusted; the Linux kernel, though trimmed, is still large; and the log stays on the device, where a client working with the server can still fill it at the rate it sends questions. See [Limitations and open questions](limitations.md).
+Both sides share one cable; traffic is not physically forced through the endpoint. Secure boot, protection against whole-store rollback and on-device update delivery are unfinished.
+
+The verifier's verdict remains trusted, and the trimmed Linux kernel remains large. Logs stay on the device; a client cooperating with the server can fill them at its request rate. See [Limitations](limitations.md).
