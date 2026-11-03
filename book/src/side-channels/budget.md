@@ -24,7 +24,7 @@
 
 A key of a few hundred bits is short enough that even a slow channel matters. But "how long?" needs two answers: how many replies can carry it, and how quickly those replies can arrive.
 
-If a bound allows B(n) bits in n replies, a key of K fresh bits needs at least a window where B(n) reaches K. Dividing that reply count by the sustained reply rate gives a lower limit on time. It does not prove an attacker can reach the limit.
+Write B(n) for the bound in n replies. Transmitting K fresh bits requires a window whose bound reaches K. Dividing that reply count by the sustained reply rate gives a lower limit on time. It does not prove an attacker can reach the limit.
 
 A constant bound per answer can be multiplied by the number of answers. Our cap instead counts whole status sequences from a fresh start, so use its bound for the actual window. Do not assume a short-window average remains constant after restarts. A noisy code may also need extra replies to correct errors.
 
