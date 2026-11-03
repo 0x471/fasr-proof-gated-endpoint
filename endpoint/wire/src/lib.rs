@@ -189,9 +189,10 @@ pub fn frame_len(header: [u8; 4], limit: usize) -> Result<usize, Invalid> {
 }
 
 // Bounded proofs with Kani (`cargo kani -p pge-wire`), for the smallest shape (one input, one output).
-// Two hold. Harnesses for request-, reply- and answer-sized inputs, and for "every valid message parses
-// back", did not finish within 30 minutes each (2 Nov 2026), so nothing is claimed for them; the fuzz
-// target `wire` covers the same properties by sampling.
+// Three hold: any 12-byte input, the frame length, and any 8-byte number field (3 Nov). Harnesses for
+// request-, reply- and answer-sized inputs, and for "every valid message parses back", did not finish
+// within 30 minutes each (2 Nov 2026), so nothing is claimed for them; the fuzz target `wire` covers
+// the same properties by sampling.
 #[cfg(kani)]
 mod proofs {
     use super::*;
@@ -205,6 +206,18 @@ mod proofs {
         let raw: [u8; 12] = kani::any();
         if let Ok(message) = wire.parse(kani::any(), &raw) {
             assert!(wire.encode(&message).unwrap() == raw);
+        }
+    }
+
+    // Any 8 bytes as one number: accepted exactly when finite, and an accepted number writes back as
+    // the same bytes, so every number field has one form on the wire.
+    #[kani::proof]
+    #[kani::unwind(9)]
+    fn any_number_field() {
+        let raw: [u8; 8] = kani::any();
+        match floats(&raw) {
+            Ok(x) => assert!(x.len() == 1 && x[0].is_finite() && x[0].to_be_bytes() == raw),
+            Err(_) => assert!(!f64::from_be_bytes(raw).is_finite()),
         }
     }
 
