@@ -13,7 +13,9 @@
 
 Every reply to a user has the same size, whether it carries an answer or an error. A parsed message must re-encode to identical bytes. This checks its written form; the server's proof bytes never become the user's reply.
 
-**Fuzzing** checks this. A fuzz test throws large numbers of random and corrupted messages at each message reader. Each must be refused, or accepted and re-encoded to identical bytes. This is tested, not proven, and it tests the message readers, not timing. The [hardening page](../hardening.md) has the details.
+**Fuzzing** checks this. A fuzz test throws large numbers of random and corrupted messages at each message reader. Each must be refused, or accepted and re-encoded to identical bytes.
+
+This is tested, not proven, and it tests the message readers, not timing. The [hardening page](../hardening.md) has the details.
 
 ## Packets on the network
 
@@ -39,7 +41,9 @@ The attack: the endpoint can hold only a limited number of questions at once. Wh
 
 The defence: an admitted question, one accepted for processing, keeps its place until release. In the fixed-release state model with halt disabled, timely and slow answers occupy places until the same targets. Thus admission depends on request times and capacity, not answer times. `endpoint/core/tests/busy_channel.rs` checks that model.
 
-Some limits remain. Under arrival-order release, answering early frees places, so the queue does depend on the server's speed. After a halt (see [Failures](failures.md)), refusals follow the server's failure. Delays of the endpoint's own loop under load are a separate, partly tested question. And users cannot tell a full queue from honest heavy load. The [delivery catalogue](../attacks.md#delivery-whether-when-and-how-often-an-answer-arrives) lists each case.
+Under arrival-order release, answering early frees places, so the queue does depend on the server's speed. After a halt (see [Failures](failures.md)), refusals follow the server's failure. Delays of the endpoint's own loop under load are a separate, partly tested question.
+
+Users cannot tell a full queue from honest heavy load. The [delivery catalogue](../attacks.md#delivery-whether-when-and-how-often-an-answer-arrives) lists each case.
 
 ## The endpoint's logs
 
