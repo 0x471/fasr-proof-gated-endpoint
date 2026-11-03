@@ -9,7 +9,7 @@
 | Proof-system soundness | The assumption that the proof system resists false computation claims. This project does not assess it. |
 | Bundle | Approved model settings, verification key and public setup file. Each file is pinned by hash. |
 | Hash or pin | A file fingerprint. Pinning means refusing to run if a file differs from the approved fingerprint. |
-| Verification key, vk | The approved model's public key for checking proofs. |
+| Verification key, vk | Public data that lets anyone check proofs for the approved model's circuit. It is not a signing key. |
 | SRS | The proof system's public setup file, pinned like the other bundle files. |
 | Request binding | Connecting the proof to the endpoint's question, approved model and interpretation of output. |
 | EZKL | The tool proving and checking our small model. Its source is public. Pinned release 23.0.5 has no licence file; the Apache-2.0 licence was removed in January 2024. |
