@@ -70,4 +70,8 @@ grep -qx 'kernel.modules_disabled = 1' "$WORK/out/target/etc/sysctl.d/90-pge.con
 ! grep -q '^kernel\.io_uring' "$WORK/out/target/etc/sysctl.d/91-pge.conf" || { echo "io_uring's switch is set but io_uring isn't built" >&2; exit 1; }
 # The log lives on /tmp (RAM); a size cap keeps a flood of records from using up memory (K51).
 grep -q '^tmpfs[[:space:]]*/tmp[[:space:]]*tmpfs[[:space:]]*[^[:space:]]*size=64m' "$WORK/out/target/etc/fstab" || { echo "/tmp has no size cap" >&2; exit 1; }
+# Every RAM file system has a size cap and runs nothing.
+for m in /dev/shm /tmp /run; do
+  grep -Eq "^tmpfs[[:space:]]+$m[[:space:]]+tmpfs[[:space:]]+[^[:space:]]*size=[^[:space:]]*noexec" "$WORK/out/target/etc/fstab" || { echo "$m: no size cap or noexec" >&2; exit 1; }
+done
 sha256sum "$WORK/out/images/sdcard.img"
