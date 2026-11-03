@@ -36,3 +36,20 @@ CONFIG_INIT_ON_ALLOC_DEFAULT_ON=y
 CONFIG_HARDENED_USERCOPY=y
 CONFIG_SLAB_FREELIST_RANDOM=y
 CONFIG_SHUFFLE_PAGE_ALLOCATOR=y
+# More trimming (3 Nov evening): no performance counters, no 32-bit programs, no raw packet sockets (the
+# address is static, so no DHCP client needs them), no io_uring, no hypervisor; the tty can't push
+# input or load a line discipline. Freed memory is wiped and the allocator's lists are checked.
+# CONFIG_PERF_EVENTS is not set
+# CONFIG_COMPAT is not set
+# CONFIG_PACKET is not set
+# CONFIG_IO_URING is not set
+# CONFIG_VIRTUALIZATION is not set
+# CONFIG_CHECKPOINT_RESTORE is not set
+# CONFIG_LEGACY_TIOCSTI is not set
+# CONFIG_LDISC_AUTOLOAD is not set
+CONFIG_INIT_ON_FREE_DEFAULT_ON=y
+CONFIG_SLAB_FREELIST_HARDENED=y
+CONFIG_LIST_HARDENED=y
+CONFIG_BUG_ON_DATA_CORRUPTION=y
+CONFIG_RANDOMIZE_KSTACK_OFFSET_DEFAULT=y
+CONFIG_SCHED_STACK_END_CHECK=y
