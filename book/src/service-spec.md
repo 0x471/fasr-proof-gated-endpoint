@@ -1,7 +1,9 @@
 # Endpoint service specification
 
 > **In short**
-> - The exact behaviour of the endpoint software: message formats and sizes, what happens to each question, the three release rules, failure handling, limits and logs.
-> - This is a reference for checking the code against. For a plain description, see [How the endpoint works](tour.md).
+> - This reference defines message formats, question handling, release rules, failures, limits and logs.
+> - Use it to check code against the intended behaviour.
+
+Start with [How the endpoint works](tour.md) for the plain explanation. Below, read connections and message formats first, then request lifecycle, failure handling, replay and logs. The [glossary](glossary.md) explains the terms.
 
 {{#include ../../docs/SERVICE_SPEC.md:2:}}
