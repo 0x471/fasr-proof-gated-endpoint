@@ -50,7 +50,7 @@ Timing behaviour does depend on the hardware and operating system, so the stock 
 
 ## Real language models are not deterministic. Does any of this still apply?
 
-Yes, but it is not enough on its own. A model that samples its words lets the server choose among valid answers, a channel in the content itself. That needs the randomness pinned as well, which no system we know does while keeping the weights secret. Our results cover what is left once that freedom is gone. See [Choosing among valid answers](answer-choice.md).
+Yes, but it is not enough on its own. A model that samples its words lets the server choose among valid answers, a channel in the content itself. That needs the randomness pinned as well, which no system we found does while keeping the weights secret. One system instead proves how much choice was left. Our results cover what is left once that freedom is gone. See [Choosing among valid answers](answer-choice.md).
 
 ## What about power, radio or sound?
 
