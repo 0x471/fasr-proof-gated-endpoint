@@ -1,0 +1,19 @@
+# Boot firmware settings for the endpoint image: Buildroot's board/raspberrypi/config_4_64bit.txt
+# (2025.02.18) with the radio chip switched off in the device tree instead of rerouted.
+start_file=start4.elf
+fixup_file=fixup4.dat
+
+kernel=Image
+
+disable_overscan=1
+
+gpu_mem_256=100
+gpu_mem_512=100
+gpu_mem_1024=100
+
+# No Bluetooth or Wi-Fi: the kernel has no drivers for them either. Turning Bluetooth off also puts
+# UART0 (ttyAMA0) on GPIO 14/15 for the serial console, as the board file's miniuart-bt did.
+dtoverlay=disable-bt
+dtoverlay=disable-wifi
+
+arm_64bit=1

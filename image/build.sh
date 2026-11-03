@@ -50,6 +50,7 @@ make -C "$BR" O="$WORK/out" raspberrypi4_64_defconfig
   echo "BR2_ROOTFS_POST_IMAGE_SCRIPT=\"board/raspberrypi4-64/post-image.sh $HERE/post-image.sh\""
   echo "BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES=\"$HERE/kernel.fragment\""
   echo "BR2_ROOTFS_POST_BUILD_SCRIPT=\"board/raspberrypi4-64/post-build.sh $HERE/post-build.sh\""
+  echo "BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE=\"$HERE/config.txt\""
 } > "$WORK/fragment"
 cat "$WORK/fragment" >> "$WORK/out/.config"
 make -C "$BR" O="$WORK/out" olddefconfig
@@ -74,4 +75,8 @@ grep -q '^tmpfs[[:space:]]*/tmp[[:space:]]*tmpfs[[:space:]]*[^[:space:]]*size=64
 for m in /dev/shm /tmp /run; do
   grep -Eq "^tmpfs[[:space:]]+$m[[:space:]]+tmpfs[[:space:]]+[^[:space:]]*size=[^[:space:]]*noexec" "$WORK/out/target/etc/fstab" || { echo "$m: no size cap or noexec" >&2; exit 1; }
 done
+# The radio chip is off in the firmware's config.
+IMG="$WORK/out/images"
+grep -qx 'dtoverlay=disable-bt' "$IMG/rpi-firmware/config.txt" && grep -qx 'dtoverlay=disable-wifi' "$IMG/rpi-firmware/config.txt" \
+  || { echo "config.txt doesn't switch the radios off" >&2; exit 1; }
 sha256sum "$WORK/out/images/sdcard.img"
