@@ -1,29 +1,36 @@
 # Measurements
 
-> **In short**
-> - Checking one proof on the Pi takes about 0.1 s with the proof tool alone, 0.19 s in the Rust endpoint and 0.24 s in the Python reference endpoint, with all the safety limits.
-> - At a 256 MiB memory cap every recorded check passed (231 of 231); smaller caps fail unpredictably.
-> - The leakage experiment, one client at a time: releasing in arrival order stopped the ordering code we tried; a fixed release time stopped the 1 s timing code, at the cost of 4 s per answer, and a pre-registered 512-answer test of what remained was inconclusive on the stock system and found nothing on the stripped image (one run); deliberate failures leaked under every policy, and a failure cap cut them at a large cost in availability. A plain explanation is in [What a hacked server can still leak](leakage.md).
-> - In a model, random sleeps instead of a fixed release time keep leaking: the leak per answer shrinks only in proportion to the added wait, and enough answers reveal it.
-
-Everything here was measured on one Raspberry Pi 4 (2 GB, Raspberry Pi OS Lite, 64-bit) with the AI server (Python EZKL prover) and the observer on a laptop (Apple M4 Pro) over a direct Ethernet link, unless stated otherwise. Dates are 2026.
-
 ## Summary
 
 <!-- ANCHOR: findings -->
-| Way to smuggle data out | Basic endpoint | Best endpoint so far | What it costs |
+| Signal | Basic endpoint | Best result so far | Cost |
 |---|---|---|---|
-| Change what an answer says | Blocked by the proof | Blocked | Each check takes about 0.24 s on the Pi |
-| Reorder answers | Leaks | **The ordering code we tried no longer gets through**: answers leave in the order questions arrived | A slow answer delays the ones behind it |
-| Delay answers | Leaks | **Much reduced**: each answer has a set release time and can't leave before it; a small trace remained without spin, and with spin a 512-answer test was inconclusive on the stock system and found nothing on the stripped image (one run) | Answers take 4.0 s instead of about 0.8 s |
-| Fail chosen answers on purpose | Leaks | **Still leaks, less**: with a failure cap, 8 of 32 planted bits got out instead of 32/32; stopping at the first failure got nothing readable out (pre-registered, 2 Nov) | with the cap, 54 of 128 answers ok instead of 120 while the server keeps failing (an honest server loses none); stopping answers nothing after the first failure |
+| Changed answer content | Blocked by proof | Blocked | About 0.24 s per check on the Pi |
+| Reply order | Leaks | Tested ordering code blocked: replies follow question order | A slow reply delays later ones |
+| Reply timing | Leaks | Much reduced. Fixed release prevents early replies; a small trace remained without spin. With spin, a 512-answer test was inconclusive on stock OS and found nothing on the stripped image, one run | 4.0 s per answer instead of about 0.8 s |
+| Chosen failures | Leaks | Cap: 8 of 32 planted bits recovered instead of 32/32. Stopping at the first failure released nothing readable; pre-registered, 2 Nov | Cap: 54 of 128 answers ok instead of 120 during continued failures; an honest server loses none. Stopping answers nothing after the first failure |
 <!-- ANCHOR_END: findings -->
 
-**How to read the leakage numbers.** The server hides known bits and an observer tries to read them back with a fixed decoder. "16/16" means every planted bit was recovered. When the decoder fails, the table says how many bits it got wrong; that means this decoder did not recover that message in that run, not that the encoding carries no information or that nothing leaks. These are achieved rates for one encoder each, from one sequential client unless stated; they are not capacity bounds.
+> **In short**
+> - Arrival order stopped the ordering code tried. Fixed release reduced timing signals; failures still leaked.
+> - The registered spin test was inconclusive on the stock system and detected nothing on the stripped image, once each.
+> - Failure caps reduced leakage at a large availability cost. Random sleeps kept leaking in a model.
+
+Unless stated otherwise, runs used one Raspberry Pi 4 with 2 GB and 64-bit Raspberry Pi OS Lite. An Apple M4 Pro laptop ran the Python EZKL prover and outside observer over direct Ethernet. Dates are 2026.
+
+A fixed decoder tries to recover planted bits. "16/16" means it recovered every bit. A decoding failure means this decoder missed this message in this run. The achieved rates are not channel-capacity bounds; tests use one sequential client unless stated otherwise.
+
+[Leakage](leakage.md) explains the mechanisms. The [glossary](glossary.md) explains the statistical terms.
 
 ## Checking one proof
 
-Whole EZKL CLI process per check (start-up, loading, verify), tiny circuit:
+### What does verification cost?
+
+The tiny circuit takes about 0.1 s in the proof tool alone. The complete Rust check takes 0.19 s; the Python reference takes 0.24 s with all safety limits.
+
+<details><summary>CLI runs and the Python cost breakdown</summary>
+
+Each CLI run includes process start-up, loading and verification.
 
 | Date | Runs | Result |
 |---|---|---|
@@ -31,7 +38,7 @@ Whole EZKL CLI process per check (start-up, loading, verify), tiny circuit:
 | 16 Oct | 20 | min 101, median 103, max 106 ms |
 | 19 Oct | 20 | min 101, median 103, max 280 ms (one cold run just after boot) |
 
-What the full endpoint path costs (19 Oct, medians of 20, `device/verify_cost.py`):
+The full-path breakdown uses medians of 20 checks on 19 Oct (`device/verify_cost.py`).
 
 <!-- ANCHOR: verify-cost -->
 | Path | ms |
@@ -44,13 +51,23 @@ What the full endpoint path costs (19 Oct, medians of 20, `device/verify_cost.py
 | Full endpoint check | 239 |
 <!-- ANCHOR_END: verify-cost -->
 
-A raw proof for the test model is 3,072 bytes. The EZKL CLI binary (23.0.5, 64-bit ARM) is 36 MB (36,091,376 bytes); it also contains the prover and setup code. One thread costs 1.7x; the launcher's Python start-up is about 45 ms. Both could be cut (a static launcher; hashing the bundle once when it lives in a read-only image). On the laptop, proving takes about 0.5-0.8 s and an in-process verify 8-14 ms.
+The raw test proof is 3,072 bytes. The 64-bit ARM EZKL CLI, version 23.0.5, is 36 MB (36,091,376 bytes). It includes proving and setup code too.
+
+One thread costs 1.7x; Python launcher start-up costs about 45 ms. A static launcher and hashing once on a read-only image could reduce these costs. On the laptop, proving takes about 0.5-0.8 s; in-process verification takes 8-14 ms.
+
+</details>
+
+### How much memory is enough?
 
 <!-- ANCHOR: memory -->
-Near the memory limit the outcome is random (address-space randomisation): 128 MiB passed 20 of 20 runs, 144 and 160 MiB only about half; at the endpoint's setting of 256 MiB every recorded check passed, 231 of 231.
+Near the limit, address-space randomisation makes outcomes vary. 128 MiB passed 20 of 20 runs; 144 and 160 MiB passed about half. At the configured 256 MiB, every recorded check passed: 231 of 231.
 <!-- ANCHOR_END: memory -->
 
-**The memory limit is not a clean floor.** Address-space limit vs. how often a valid proof is accepted, in one sweep of 20 runs per limit (19 Oct; the rest abort, which the endpoint treats as an error):
+More memory did not improve acceptance steadily. A false error counts as server failure, so a margin matters. The cap is enforced only on Linux.
+
+<details><summary>Memory sweep and reliability limits</summary>
+
+One sweep on 19 Oct ran 20 checks per limit. Unaccepted checks aborted and became endpoint errors.
 
 | Limit | Accepted |
 |---|---|
@@ -64,9 +81,19 @@ Near the memory limit the outcome is random (address-space randomisation): 128 M
 | 256 MiB (the endpoint's setting) | 20/20 |
 | 320 MiB | 20/20 |
 
-Other runs the same day at 256 MiB: one first check, then 200/200 and 10/10, so 231 of 231 in all with the sweep; at 192 MiB 200/200; at 160 MiB 4/10 in a later sweep. The outcome near the limit varies from run to run and doesn't improve steadily with more memory (address-space layout randomisation is on). At 256 MiB, 0 failures in 231 runs means below about 1.3 % at 95 % confidence if the runs are independent; not proven zero, and only for this circuit on this Pi. A spurious error would count as a server failure, so the margin matters. The memory cap is enforced on Linux only.
+Other checks that day at 256 MiB comprised one first check, then 200/200 and 10/10. Together with the sweep, that gives 231 of 231. At 192 MiB another run passed 200/200; at 160 MiB a later sweep passed 4/10.
+
+Address-space layout randomisation was on. Zero failures in 231 independent runs puts the failure rate below about 1.3 % at 95 % confidence. Independence is an assumption; this is not proven zero and covers only this circuit on this Pi.
+
+</details>
 
 ## Attack surface
+
+### What could a network attacker reach?
+
+We scanned each version and recorded its services. The development image had no endpoint; later images ran one. A quiet scan alone therefore does not show a working hardened endpoint.
+
+<details><summary>Network scans and image conditions, by version</summary>
 
 <!-- ANCHOR: attack-surface -->
 | Version | Seen from outside | Notes |
@@ -76,16 +103,43 @@ Other runs the same day at 256 MiB: one first check, then 200/200 and 10/10, so 
 | v1 hardened image (2 Nov, `aa289680...`, booted on the Pi 2 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped (connect scan of every port from the laptop) | The endpoint started, so both start-up checks passed on the device: firewall rules loaded, module loading switched off. 16/16 honest answers ok, each 4000.8-4002.0 ms after it was sent. Locked-down kernel and no login: checked in the build (`image/build.sh`), not observed on the device (no screen attached, no login by design) |
 | v1 image with the update store and firewall (30 Oct, booted on the Pi) | TCP 8700 only; all 65,534 other TCP ports dropped (no reply at all, where the image without the firewall refused them); ping dropped | Model and release policy from the signed update store on a writable data partition; nftables rules built into the kernel; the endpoint won't start without the rules |
 | v1 image with the Rust endpoint (30 Oct, booted on the Pi) | TCP 8700 only (connect scan of all 65,535 ports from the laptop; every other port refused) | One static endpoint binary as user `pge`, fixed release 4 s, read-only root, no Python, no SSH; UDP not scanned |
-| v1 development image (16 Oct, `sdcard.img` 159 MB) | 0 of 65,535 TCP ports open; top 100 UDP ports closed; no IPv6 | **No endpoint was running on this image yet**, so this shows a quiet base system, not a working hardened endpoint |
+| v1 development image (16 Oct, `sdcard.img` 159 MB) | 0 of 65,535 TCP ports open; top 100 UDP ports closed; no IPv6 | No endpoint was running on this image yet, so this shows a quiet base system, not a working hardened endpoint |
 <!-- ANCHOR_END: attack-surface -->
 
-**Two independent builds of the image (2 Nov).** The 2 Nov hardened image was built twice from the same `image/` files and the same CI endpoint binary: once in the laptop's Linux VM, once on a clean GitHub runner (`.github/workflows/image.yml`, the update signed with a throwaway key), and every file compared (`image/manifest.sh`). 779 of 796 files are identical, the endpoint binary and every configuration file among them. 5 differ by design (the throwaway key: `root.pub`, the key list, two signatures and the store state). The other 12 differ only in build metadata: BusyBox's build time, a padded build-directory string in 9 xz, kmod and nftables binaries and libraries (4 characters shorter on the runner, as its build directory is), host paths in a gdb helper script, and the kernel (its user@host, build number, time and the module-signing certificate generated at each build, which shift the rest of the file). So the user space checks out file by file, but the kernel can't be compared byte for byte until the build is made reproducible (fixed build time and path, and a way to handle the generated signing key).
+</details>
 
-**The v1.1 build, made reproducible (2 Nov).** For v1.1 the build uses Buildroot's reproducible mode, both builds run in the same directory, and the kernel is built with no module-signing key (it then embeds no certificate, and with lockdown no module can ever load). Two builds on GitHub's ARM runners from the same commit and the same CI endpoint binary: 791 of 796 files identical, **the kernel included**; the other 5 are the throwaway-key files, different by design. A third build, in the laptop's Linux VM with the demo keys, matched them the same way: 791 of 796 files identical, the kernel and the endpoint binary included, the other 5 being the files that depend on the signing key. So two different machines produce the same image; v1.1 hasn't been booted on the Pi yet.
+### Can another machine reproduce the image?
+
+The first hardened build matched user space apart from build metadata. v1.1 then made the kernel reproducible too, excluding signing-key-dependent files. v1.1 has not yet booted on the Pi.
+
+<details><summary>Two independent builds, then the reproducible v1.1 build, 2 Nov</summary>
+
+The hardened image used identical `image/` files and the same CI endpoint binary. One build ran in the laptop's Linux VM; another ran on a clean GitHub runner through `.github/workflows/image.yml`. The runner signed its update with a throwaway key. `image/manifest.sh` compared every file.
+
+779 of 796 files matched, including the endpoint and every configuration file. Five differed by design: `root.pub`, the key list, two signatures and store state.
+
+The other 12 differences were build metadata:
+
+- BusyBox's build time.
+- A padded directory string in 9 xz, kmod and nftables binaries and libraries. The runner's directory was 4 characters shorter.
+- Host paths in a gdb helper script.
+- The kernel's user@host, build number, time and newly generated module-signing certificate, which shifted the rest of the file.
+
+This checked user space file by file. Comparing kernels byte for byte required fixed build time and path, plus handling the generated signing key.
+
+v1.1 enables Buildroot's reproducible mode and uses the same build directory everywhere. The kernel has no module-signing key, so embeds no certificate; lockdown then prevents any module loading.
+
+Two GitHub ARM-runner builds used the same commit and CI endpoint binary. 791 of 796 files matched, including the kernel. The other 5 depended on the throwaway key.
+
+A third build used the laptop's Linux VM and demo keys. It also matched 791 of 796 files, including the kernel and endpoint. The same 5 signing-key-dependent files differed by design. Thus different machines reproduced the image subject to those key-dependent differences.
+
+</details>
 
 ## The Rust endpoint on the Pi (29 Oct)
 
-The device now runs the Rust endpoint (static 64-bit ARM binary from CI, no Python or EZKL CLI on the device). Same Pi and setup as above; raw data in the git-ignored `runs/2026-10-29_rust/`.
+### Did the Rust port preserve behaviour and improve speed?
+
+The device runs a static 64-bit ARM CI binary, without Python or the EZKL CLI. These checks used the same Pi and setup described above. Raw data is in git-ignored `runs/2026-10-29_rust/`.
 
 | Check | Result |
 |---|---|
@@ -98,24 +152,68 @@ The device now runs the Rust endpoint (static 64-bit ARM binary from CI, no Pyth
 | Three connections at once (arrival and fixed, honest and order code) | all answers ok; the order code decoded to a constant |
 | 5 ms spin, 512 answers, the same pre-registered protocol | inconclusive again: held-out decoder 0.44 / 0.48 errors, p = 0.0325; received 0.8-2.8 ms after the release time |
 
-Two fixes made the Rust endpoint faster than the Python one: each check had hashed the 4 MB bundle three times (this Pi's CPU has no SHA instructions, about 25-28 ms per pass), and the supervisor slept 1 ms after every 64 KiB written to the checker, about 66 ms per check. Before them the Rust endpoint was about 65 ms slower per answer end to end.
+<details><summary>Why Rust was initially slower</summary>
 
-**How much of the 4 s budget honest answers use** (computed 2 Nov from the honest arrival and immediate runs of 19 and 29 Oct on this page; time from sending a question to reading its answer, laptop prover): with one client, medians of 810-901 ms and at most 979 ms (three runs of 16, 19 and 29 Oct); with three connections at once, a median of 1,824 ms and at most 2,936 ms (24 answers, 29 Oct), because the laptop proves one answer at a time and the third question of a round waits for the first two. All 72 of these honest answers were ok, so at this load honest traffic alone produced no failures for the cap to count. Under fixed release an answer not checked within the budget leaves as `unavailable`, so the budget has to cover the prover's queue at the busiest load, not one proof: with three clients, 4 s left about a second. How the timing results change with other budgets was not measured.
+Each check originally hashed the 4 MB bundle three times. This Pi lacks SHA instructions; each pass costs about 25-28 ms. The supervisor also slept 1 ms after every 64 KiB written to the checker, costing about 66 ms per check.
 
-**The v1 image on the Pi (30 Oct).** The laptop as the AI server, the image's own settings (fixed release, 4 s, 5 ms spin): honest answers 9/9 ok, each received 4001-4003 ms after it was sent; changed outputs 3/3 and garbage frames 3/3 refused (`unavailable`); the endpoint reconnected to a restarted server within about 2 s. Leakage, one run each with the bits of the matrix below: the 1 s timing code gave 11 of 16 bits wrong (answers 4000.8-4001.6 ms); the failure-position code still leaked 16/16 (no cap on this image). These runs overlapped a port scan, so their timing is a smoke check only.
+Before fixing those issues, Rust was about 65 ms slower per answer end to end. Both fixes made it faster than the Python path.
 
-**The image with the update store and firewall (30 Oct):** port 8700 back about 21 s after power-on; honest answers 9/9 ok at 4001-4005 ms (fixed release from the signed manifest); changed outputs 3/3 and garbage 3/3 refused; replayed answers for the same question 3/3 accepted (by design).
+</details>
 
-The same pre-registered 512-answer test with a 5 ms spin (`docs/EXPERIMENT_PROTOCOL.md`), repeated on the v1 image (30 Oct): the held-out decoder got 0.49 and 0.52 of answers wrong (p = 0.50, honest control p = 0.69), so under the rule the result is **not detected by this decoder at n = 512**; signal answers were received 0.8-2.3 ms after the release time. The same test was inconclusive on the stock system (Python 20 Oct, Rust 29 Oct). One run each, on different days: this doesn't show the image removed the trace, and a better decoder might still find one. The honest control had six late answers (one 28.6 ms late), cause unknown.
+### How much of the release budget does honest traffic use?
+
+One client used medians of 810-901 ms and at most 979 ms. Three concurrent connections used a median of 1,824 ms and at most 2,936 ms. All 72 honest answers passed, so this load caused no failures for the cap to count.
+
+<details><summary>Runs, queueing and scope</summary>
+
+Computed on 2 Nov from honest arrival and immediate runs on 19 and 29 Oct, using the laptop prover. Times run from sending a question to reading its answer. The one-client results comprise three runs of 16; the three-connection run has 24 answers from 29 Oct.
+
+The laptop proves one answer at a time. A round's third question waits for the first two. Fixed release turns an unchecked answer into `unavailable` at the deadline, so the budget must cover the busiest proving queue, not just one proof.
+
+With three clients, the 4 s budget left about a second. Leakage under other budgets has not been measured.
+
+</details>
+
+### Did the v1 images work on the Pi?
+
+<details><summary>30 Oct smoke checks</summary>
+
+The first image used its own settings: fixed release, 4 s and 5 ms spin, with the laptop as server.
+
+- Honest answers: 9/9, received 4001-4003 ms after sending.
+- Changed outputs: 3/3 refused; garbage frames: 3/3 refused. Both gave `unavailable`.
+- The endpoint reconnected within about 2 s after a server restart.
+- One timing-code run got 11 of 16 bits wrong, with answer times of 4000.8-4001.6 ms.
+- Failure position still leaked 16/16; this image had no cap.
+
+Both leakage runs used the matrix's bits and overlapped a port scan. Their timing is a smoke check only.
+
+The update-store/firewall image brought port 8700 back about 21 s after power-on. Honest replies were 9/9 at 4001-4005 ms, using fixed release from the signed manifest. Changed outputs and garbage were each refused 3/3. Replayed answers for the same question were accepted 3/3 by design.
+
+</details>
+
+### Did the stripped image remove the timing trace?
+
+The registered 512-answer test detected nothing with this decoder on the v1 image. That does not show the image removed the trace: each system had one run on different days. A better decoder could still find a signal.
+
+<details><summary>30 Oct repeat and the unexplained late controls</summary>
+
+The test repeated `docs/EXPERIMENT_PROTOCOL.md` with 5 ms spin. Held-out error rates were 0.49 and 0.52, p = 0.50; the honest control gave p = 0.69. The registered verdict is "not detected by this decoder at n = 512".
+
+Signal replies arrived 0.8-2.3 ms after release time. The same test was inconclusive on stock systems: Python on 20 Oct, Rust on 29 Oct. The honest image control had six late answers, one 28.6 ms late; their cause is unknown.
+
+</details>
 
 ## The endpoint end to end
+
+### Did correct answers pass and bad server behaviour fail?
 
 | Date | Software | Result |
 |---|---|---|
 | 16 Oct | v0 (JSON, immediate release) | about 0.9-1.05 s per answer (mostly proving on the laptop); `y` matches the float model within quantisation |
 | 19 Oct | v1 (binary, arrival order, limits, fixed-word logs) | 5/5 ok, 0.79-0.89 s per answer |
 
-Misbehaving server against the v1 endpoint on the Pi (19 Oct):
+The v0 output `y` matched the float model within quantisation. Against v1 on 19 Oct:
 
 | Server behaviour | What the endpoint did |
 |---|---|
@@ -124,31 +222,41 @@ Misbehaving server against the v1 endpoint on the Pi (19 Oct):
 | Answers twice | one answer to the client; the duplicate is dropped and counted |
 | Sends garbage or an oversized frame | server link dropped; the pending request fails, the next gets `unavailable` in under 1 ms |
 
-The first timing test (16 Oct, v0): the server delayed an answer by 1 s for each 1 bit; an observer decoded 16 of 16 bits, 0.69 bit/s, while honest answers varied by 81 ms.
+The first timing test, on 16 Oct v0, delayed answers by 1 s for a one bit. The observer recovered 16 of 16 bits at 0.69 bit/s. Honest answers varied by 81 ms.
 
 ## Release policies on the Pi
 
-The core experiment (19 Oct): the same workload under each of the endpoint's three release policies, with a 4 s budget for every policy, 16 planted bits per channel, one run per cell (`device/pi_matrix.sh`, summarised by `observer/analyze_matrix.py`).
+### Which release rules stopped the planted messages?
+
+The core experiment ran on 19 Oct: one run per cell, 16 planted bits per channel, a 4 s budget for every policy. `device/pi_matrix.sh` ran it; `observer/analyze_matrix.py` summarised it.
 
 <!-- ANCHOR: matrix -->
 | Channel the server uses | immediate (v0) | arrival (v1) | fixed |
 |---|---|---|---|
-| Timing: delay an answer by 1 s for a 1 | **16/16 recovered** | **16/16 recovered** | not recovered (12/16 wrong); answer times spread over 2.0 ms |
-| Ordering: answer 3 concurrent requests in a chosen order | **16/16 recovered** | decoded bits constant | decoded bits constant |
-| Failure position: fail one chosen answer in each 16 | **16/16 recovered** | **16/16 recovered** | **16/16 recovered** |
+| Timing: delay an answer by 1 s for a 1 | 16/16 recovered | 16/16 recovered | not recovered (12/16 wrong); answer times spread over 2.0 ms |
+| Ordering: answer 3 concurrent requests in a chosen order | 16/16 recovered | decoded bits constant | decoded bits constant |
+| Failure position: fail one chosen answer in each 16 | 16/16 recovered | 16/16 recovered | 16/16 recovered |
 | No signal (honest server, timing decoder) | 8/16 wrong | 10/16 wrong | 7/16 wrong |
 | Honest answer time, median | 0.81 s | 0.83 s | 4.0 s |
 <!-- ANCHOR_END: matrix -->
 
-- **Ordering:** with arrival or fixed release the decoded bits were the same whatever the server planted, so the server's choice of order never reached the observer. On one connection that holds by construction: the endpoint sends answers in admission order and the client's ids increase. A separate localhost run showed v0 leaking floor(log2 k!) bits per batch of k concurrent requests with no errors (16/16, 32/32 and 64/64 bits for k = 2, 3, 4).
-- **Timing:** the 1 s code wasn't recovered under fixed release, but a smaller timing trace remains (below). The cost is latency: every answer waits the whole budget, about 5 times the honest median in this sequential run.
-- **Failures** were recovered under every policy (below).
+- Ordering: arrival and fixed release produced constant decoded bits regardless of the planted message. On one connection, admission-order replies and increasing client ids enforce this by construction.
+- Timing: fixed release stopped recovery of the 1 s code, but left a smaller trace. Each answer waited the budget, about 5 times the honest median in this sequential run.
+- Failure position: every policy leaked the message.
+
+A separate localhost v0 run recovered floor(log2 k!) bits per batch of k concurrent questions without errors. It recovered 16/16, 32/32 and 64/64 bits for k = 2, 3, 4.
 
 <!-- ANCHOR: failure-leak -->
-Only 4 of 64 answers failed (one chosen position in each block of 16), yet all 16 bits got through: 0.25 bit per request with this encoder.
+Only 4 of 64 answers failed: one chosen position per block of 16. All 16 bits got through, or 0.25 bit per request with this encoder.
 <!-- ANCHOR_END: failure-leak -->
 
-**How the failure code scales.** The position code fails one answer in each batch of B answers and hides log2(B) bits in which one fails, so n answers carry (n/B) log2(B) bits for n/B failures. Sending 512 bits takes 128 failures in 2,048 answers with B = 16, or 52 failures in 53,248 answers with B = 1,024: fewer failures cost many more answers. That is one encoder; the limits for any encoder that only uses which answers fail are:
+### How the failure code scales
+
+One failure per batch of B answers carries log2(B) bits in its position. Thus n answers carry (n/B) log2(B) bits with n/B failures.
+
+Sending 512 bits needs 128 failures among 2,048 answers with B = 16. With B = 1,024, it needs 52 failures among 53,248 answers. Fewer failures cost more answers.
+
+That is one encoder. For any encoder using only failure positions:
 
 <!-- ANCHOR: failure-scaling -->
 | What the server may do | Bits it can carry |
@@ -158,11 +266,11 @@ Only 4 of 64 answers failed (one chosen position in each block of 16), yet all 1
 | Any pattern the failure cap allows (W = 64, F = 1, C = 64, `observer/cap_bound.py`) | at most 11.02 bits in 64 replies, 63.05 in 512, 472.71 in 4,096 (about 0.12 bit per reply) |
 <!-- ANCHOR_END: failure-scaling -->
 
-These count only which answers fail; timing, busy replies and logs are separate (see the `cap_bound.py` docstring).
+These bounds count failure patterns only. Timing, busy replies and logs are separate; see the `observer/cap_bound.py` docstring.
 
 ### What fixed release leaves
 
-A longer run (128 random bits, plus 128 honest requests as a control) asked whether the 2 ms of remaining jitter still follows the server:
+The first longer run used 128 random bits and 128 honest-control requests. It asked whether the remaining 2 ms of jitter followed the server's choices.
 
 | Run | Bit-1 minus bit-0 answer time | Permutation test |
 |---|---|---|
@@ -174,23 +282,52 @@ A longer run (128 random bits, plus 128 honest requests as a control) asked whet
 | Honest server, spin, fixed code, n = 512 (20 Oct) | -0.02 ms | p = 0.48 |
 
 <!-- ANCHOR: no-spin-trace -->
-Without spin, answers for 1 bits left 0.66 ms earlier than answers for 0 bits (128 answers, p < 0.0001; the honest control showed nothing), and a decoder fitted on one half and tested on the other got about three bits in four right.
+Without spin, one-bit answers left 0.66 ms earlier than zero-bit answers: 128 answers, p < 0.0001; the honest control showed nothing. A decoder trained on one half and tested on the other got about three bits in four right.
 <!-- ANCHOR_END: no-spin-trace -->
 
-**Without spin**, the association is clear. A threshold decoder fitted on one half and tested on the other got 25 % and 28 % of the bits wrong (`observer/jitter_test.py --heldout`). If the channel were a symmetric binary channel with independent errors, that would correspond to about 0.14-0.19 bit per answer; it is a model-based figure, not a measured throughput, and the two error kinds were not symmetric in one half.
-
-**With a 5 ms spin** (wake early and busy-wait until the release time, `--spin-ms 5`) no mean shift was detected (+0.08 ms, p = 0.31), but in that run the held-out decoder still got only 34 % wrong on one half (44 % on the other; honest controls 39-59 %), and a null that refits the decoder on shuffled labels does that well only 0.75 % of the time. That run used the spin code from before the K33 fix and 0.1 ms timestamps, so it was repeated.
-
-**The repeat (20 Oct)** followed a protocol written before the data (`docs/EXPERIMENT_PROTOCOL.md`): 512 seeded random bits (249 ones), the fixed spin code, microsecond timestamps, and an honest run of 512 as the control. Both runs completed 512 of 512 answers, every one accepted, each received by the observer 4000.96-4003.84 ms after it was sent, that is 0.96-3.84 ms after its 4 s release time (network included). The primary test is the held-out decoder: it got 118 and 113 of 256 wrong (46 % and 44 %), and the refitting null does as well as the better half 4.1 % of the time (p = 0.041; honest control 131 and 134 of 256 wrong, p = 0.77). The protocol counts a residue as shown only below p = 0.01 and as not detected only above 0.05, so the result is **inconclusive**. Whatever this decoder finds is small: 143 of 256 right on its better half (about 56 %), against 72-75 % without spin (n = 128, 19 Oct). This does not show the channel is gone or bound what a cleverer observer could do, and separate runs on different days don't show that spin caused the difference. Idle wake-up latency is one hypothesis for a residue; it hasn't been isolated. The complete analysis output for both runs is in `docs/results/2026-10-20_spin5_512.md`.
-
-**In plain words:**
 <!-- ANCHOR: spin-verdict -->
-With a 5 ms spin no mean shift was detected, and a 512-answer test with its decision rule fixed in advance was inconclusive: the held-out decoder got 143 of 256 right on its better half (about 56 %, p = 0.041, where the rule needed p < 0.01 to call it a leak and p > 0.05 to call it not detected). What this decoder finds is small, but the trace isn't shown to be gone, and a cleverer decoder might find more. On the stripped v1 image (30 Oct) the same test found nothing (p = 0.50, one run), so the residue may depend on the system around the endpoint; that hasn't been isolated.
+With a 5 ms spin, no mean shift was detected. A pre-registered 512-answer test was inconclusive: its better half decoded 143 of 256 correctly, about 56 %, p = 0.041. The rule requires p < 0.01 for a leak and p > 0.05 for "not detected".
+
+This decoder finds little, but the trace is not shown to be gone. A cleverer decoder might find more. On the stripped v1 image, the same test found nothing on 30 Oct: p = 0.50, one run. The residue may depend on the surrounding system; this has not been isolated.
 <!-- ANCHOR_END: spin-verdict -->
 
-Deviation from the protocol: the first attempt at both runs stopped at 149 of 512 answers because the observer's time limit was fixed at 600 s. The limit now grows with the run's length (commit `cd0086c`, which changes only `device/pi_scenario.sh`; the endpoint's code hash on the Pi was the same), and both runs were repeated in full. That first attempt was also disturbed by an edit to the script while it ran; its signal run has no manifest or endpoint log, and its honest run stopped with 149 rows while the endpoint logged 150 accepts. The automatic analysis of the partial runs was printed and is not used; the registered rule was not changed after it.
+<details><summary>Earlier decoder results and why the spin test was repeated</summary>
 
-A second measure on the same data (`observer/estimate.py`): the mutual information between the hidden bit and the answer time, with times cut into 4 bins at their quantiles, a small-sample bias correction, a shuffled-label null and a bootstrap interval, checked first on synthetic channels with known values (`tests/test_estimate.py`). It describes this one binned statistic; it is not a lower or upper bound on what the timing reveals.
+Without spin, `observer/jitter_test.py --heldout` got 25 % and 28 % wrong on its two halves. Independent, symmetric binary errors would imply about 0.14-0.19 bit per answer. That is a model-based figure, not measured throughput; one half's two error kinds were not symmetric.
+
+The first 5 ms spin run woke early and busy-waited until release (`--spin-ms 5`). Its mean shift was +0.08 ms, p = 0.31. Held-out errors were 34 % on one half and 44 % on the other; honest controls were 39-59 %.
+
+A null test refitted the decoder to shuffled labels and did that well only 0.75 % of the time. This run preceded the spin-ordering fix and recorded 0.1 ms timestamps, so it was repeated.
+
+</details>
+
+<details><summary>The registered repeat, 20 Oct: results and limitations</summary>
+
+`docs/EXPERIMENT_PROTOCOL.md` was written before the data. It specified 512 seeded random bits, 249 of them ones, corrected spin code, microsecond timestamps and 512 honest-control requests.
+
+Both runs completed 512 of 512, all accepted. Replies arrived 4000.96-4003.84 ms after sending, or 0.96-3.84 ms after their 4 s release time, including the network.
+
+The primary held-out decoder missed 118 and 113 of 256, or 46 % and 44 %. Its refitted null matched the better half 4.1 % of the time: p = 0.041. The honest control missed 131 and 134 of 256, p = 0.77.
+
+The registered rule calls a residue only below p = 0.01, and "not detected" only above 0.05. Hence the verdict is inconclusive. Its better half got 143 of 256 right, about 56 %, against 72-75 % without spin at n = 128 on 19 Oct.
+
+This does not show the channel is gone or bound a cleverer observer. Separate days also cannot show that spin caused the difference. Idle wake-up latency is an unisolated hypothesis. Complete output: `docs/results/2026-10-20_spin5_512.md`.
+
+</details>
+
+<details><summary>Protocol deviation: discarded partial runs</summary>
+
+The first signal and control attempts stopped at 149 of 512 because the observer had a fixed 600 s timeout. Commit `cd0086c` changed only `device/pi_scenario.sh` to scale that limit with run length. The Pi endpoint's code hash stayed unchanged; both runs were repeated fully.
+
+An edit to the script while it ran also disturbed the first attempt. Its signal run lacks a manifest and endpoint log. Its honest run has 149 rows but 150 logged accepts. The partial-run analysis was printed but is not used; the registered decision rule stayed unchanged.
+
+</details>
+
+<details><summary>A second statistic: binned mutual information</summary>
+
+`observer/estimate.py` measures how much the hidden bit is associated with answer time. It uses 4 quantile bins, small-sample bias correction, a shuffled-label null and a bootstrap interval. `tests/test_estimate.py` first checked it on synthetic channels with known values.
+
+This describes one binned statistic, not a lower or upper bound on timing leakage.
 
 | Run | n | Mutual information, bit per answer (4 bins) | p |
 |---|---|---|---|
@@ -201,15 +338,27 @@ A second measure on the same data (`observer/estimate.py`): the mutual informati
 | Spin, fixed code, server encoding bits | 512 | 0.006 (bootstrap interval -0.003 to 0.026) | 0.069 |
 | Spin, fixed code, honest server | 512 | -0.004 (bootstrap interval -0.004 to 0.011) | 0.94 |
 
-The bias correction can make the estimate negative; that is estimator noise, not negative information. The bootstrap intervals assume exchangeable answers within one run; they are not intervals over sessions, days or encoders.
+Negative estimates are bias-correction noise, not negative information. Bootstrap intervals assume exchangeable answers within one run. They do not cover variation between sessions, days or encoders.
 
-With 2 or 8 bins the no-spin result holds (p = 0.0005) and the old spin result doesn't reach significance (p = 0.46 and 0.09). Caveats on the 128-answer runs: the observer recorded times rounded to 0.1 ms (only 19-30 distinct values per 128 answers), and the spin runs used an earlier version of the spin code that a review later found could let a later answer overtake an earlier one when several were in flight. The 512-answer repeat fixes both; at 4 bins and n = 512 it is not significant either (p = 0.069).
+With 2 or 8 bins, the no-spin result holds at p = 0.0005. The old spin result is not significant: p = 0.46 and 0.09. The corrected 512-answer run is also not significant with 4 bins, p = 0.069.
+
+The 128-answer runs rounded times to 0.1 ms, leaving only 19-30 distinct values per run. Their old spin code could let a later answer overtake an earlier one with several in flight, as review found. The 512-answer repeat fixes both limitations.
+
+</details>
 
 ### Random sleeps instead of a fixed release time (a model, 2 Nov)
 
-A model, not a device measurement (`observer/sleep_vs_fixed.py`, tests in `tests/test_sleep_vs_fixed.py`): the server sends each answer on time or a fixed amount late, and the endpoint either adds a sleep drawn uniformly from 0 to R before release or releases at a fixed time after the question arrived. With uniform sleeps alone, one answer of a two-level code that shifts by d carries exactly d/R bit (d up to R): only the first and last d of the window give the bit away, and extra noise only lowers this. A server allowed to delay by up to A can carry up to log2(1 + A/R) bit per answer (exact when A/R is a whole number), so the sleep has to grow with the server's freedom. With a fixed release time the release moment doesn't depend on the server at all; an answer that misses it is not released and becomes a failure, which is the failure channel above.
+Does adding random delay hide the server's chosen delay? In this model, it keeps leaking; fixed release gives no timing signal. This is not a device measurement.
 
-Simulated with honest-time noise of sd 20 ms, a 200 ms shift code and 4,096 answers, the binned estimate (`observer/estimate.py`, 4 bins, so it understates the exact value) was significant for every sleep tried, up to sleeps of 0-4 s that add 2 s on average; fixed release gave none:
+The model is `observer/sleep_vs_fixed.py`, with tests in `tests/test_sleep_vs_fixed.py`. The server answers on time or a fixed amount late. The endpoint adds a uniform sleep from 0 to R, or releases at a fixed time after admission.
+
+<details><summary>Analytic model and simulations</summary>
+
+For a two-level code shifted by d, uniform sleeps alone reveal exactly d/R bit per answer when d is at most R. Only the first and last d of the window reveal the bit. Extra noise only lowers that information.
+
+A server allowed delay up to A can carry up to log2(1 + A/R) bit per answer, exact when A/R is an integer. The sleep must therefore grow with the server's freedom. Fixed release removes that timing choice; a missed deadline becomes a failure signal instead.
+
+The simulation used honest-time noise with sd 20 ms, a 200 ms shift and 4,096 answers. The 4-bin estimator understates the exact value. Every tested random sleep remained significant, including 0-4 s sleeps that add 2 s on average.
 
 | Release rule | Added wait on average | Upper bound, d/R | Binned estimate | p (500 shuffles) |
 |---|---|---|---|---|
@@ -219,11 +368,13 @@ Simulated with honest-time noise of sd 20 ms, a 200 ms shift code and 4,096 answ
 | Random sleep 0-4 s | 2 s | 0.05 bit | 0.005 bit | 0.002 |
 | Fixed release, 4 s | 3.2 s | 0 | 0.000 bit | 1.0 |
 
-With a smaller 50 ms shift and 512 answers the same estimate no longer reached significance from sleeps of 0-0.5 s up (p = 0.076 to 0.53), although the d/R bound there is still 0.1 down to 0.0125 bit per answer: a test that finds nothing at one sample size is not evidence that the sleep closed the channel.
+With a 50 ms shift and 512 answers, sleeps from 0-0.5 s upwards were not significant: p = 0.076 to 0.53. Yet d/R remains 0.1 down to 0.0125 bit per answer. Finding nothing at one sample size does not establish that random sleep closed the channel.
+
+</details>
 
 ### Several connections (smoke runs, 20 Oct)
 
-Short checks of the new run script and the several-clients observer (`CLIENTS=3`, 4 s budget, one run each, not a registered experiment):
+These short checks tested the new runner and several-client observer. They used `CLIENTS=3`, a 4 s budget, and one run each; they were not registered experiments. The single-client smoke row below used a 1 s release time.
 
 | Run | Result |
 |---|---|
@@ -232,22 +383,34 @@ Short checks of the new run script and the several-clients observer (`CLIENTS=3`
 | 3 connections, server answers each round in a chosen order (8 bits), immediate release | 8/8 bits read back from the order replies arrived across connections |
 | The same, arrival release | decoded bits constant (`00000000`): the order across connections didn't follow the server |
 
-So the order a server chooses does reach an outside observer across separate connections when answers leave as they are checked, and arrival-order release stopped this code in this run. It is 8 bits in one run per rule, on one machine running all three clients; the planned two-client deadline-pressure experiment is the real test.
+The chosen order reached the observer across connections under immediate release. Arrival order stopped this code in this run: 8 bits per rule, with all three clients on one machine. The planned two-client deadline-pressure experiment remains the substantive test.
 
 ### Load and several clients on the hardened image (2 Nov, protocols 4 and 5)
 
-Both pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`, run on the 2 Nov hardened image (`aa289680...`, fixed release 4 s, 5 ms spin) with the laptop idle; every answer in every run was ok. Deviation from the protocols: no packet captures were taken (they need `sudo` on the laptop), so only the primary and secondary analyses below exist. Before any data, a dry run on the Pi showed the `load_bits` server sending late (proving in EZKL's Python binding stalls the server's event loop for the whole proof, about half a second); the server now proves each distinct question once, and both runs had no late sends.
+Could overlapping proof checks or concurrent clients shift releases? One overlapping check was not detected; the three-client timing test was inconclusive. Every answer in every run was accepted.
+
+Both tests were pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. They used image `aa289680...`, fixed release 4 s, 5 ms spin and an idle laptop.
 
 | Protocol | Runs | Held-out decoder (signal / control) | Secondary | Verdict (rule fixed in advance) |
 |---|---|---|---|---|
-| 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | **not detected**: one overlapping check per release doesn't move releases on this image at n = 256 |
-| 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | **inconclusive**: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
+| 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | not detected: one overlapping check per release doesn't move releases on this image at n = 256 |
+| 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | inconclusive: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
 
-What protocol 4 doesn't cover: several checks stacked across one release, flooding, and checker and event loop forced onto one core.
+Protocol 4 does not cover stacked checks across one release, flooding, or forcing checker and event loop onto one core.
+
+<details><summary>Missing captures and the pre-run server fix</summary>
+
+No packet captures were taken: they required `sudo` on the laptop. This deviated from the protocols, leaving only the primary and secondary analyses above.
+
+Before collecting data, a Pi dry run showed `load_bits` sending late. EZKL's Python proving call blocked the server event loop for about half a second. The server now proves each distinct question once. Neither recorded run had late sends.
+
+</details>
 
 ### Failure cap versus stopping (2 Nov, protocol 3)
 
-Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`: the stock system with the Rust endpoint (`f8b56ec` CI binary, `6f7f8702...`), fixed release 4 s, 5 ms spin, one client, 128 answers per run; the server hides 32 random bits in which answer of each 16 fails. Every reply of every run matched the reference model (`observer/cap_model.py`) exactly.
+How much information remains, and how many answers are lost? Each run matched `observer/cap_model.py` reply for reply. Stopping leaked least but gave the server an off switch. Caps kept some answers flowing; the availability cost appeared only when the attacker caused failures.
+
+Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. Runs used stock OS, Rust CI binary `f8b56ec` (`6f7f8702...`), fixed release 4 s, 5 ms spin and one client. Each run had 128 answers, with 32 planted random bits encoded by failing one chosen answer per 16.
 
 | Failure policy | Planted bits read back (of 32) | Answers ok (of 128) | At most, for any failure code (`observer/cap_bound.py`) |
 |---|---|---|---|
@@ -257,11 +420,9 @@ Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`: the stock system with the Rus
 | Stop after the first failure | none (the first answer failed, and nothing was answered after it) | 0 | the stopping position: at most log2(129) = 7.0 bits, once, until someone restarts it |
 | Honest server, same cap as the second row | (no bits planted) | 128 | |
 
-So stopping leaks least but hands the server an off switch, and a cap keeps the device answering at a cost that only an attacker's failures trigger.
-
 ## What these results don't show
 
-- One device, one network, one sequential client (ordering used concurrent requests on one connection). Several clients and one kind of load were measured once each (protocols 5 and 4 above); other loads and packet-level observation (sizes, TCP behaviour) are not measured yet.
-- Every leakage cell is one run of 16 bits, except the 128-bit residual tests and the 512-bit spin repeat.
-- The release budget (4 s) was chosen by hand; how much of it honest answers use is measured (see the 29 Oct section), but leakage under other budgets is not.
-- Nothing here is a bound on what a cleverer encoder could achieve.
+- Generality across devices, networks or loads. Most tests use one sequential client; ordering uses concurrent requests. Protocols 4 and 5 each add one load or several-client run. Packet sizes and TCP behaviour remain unmeasured.
+- Repeated-run reliability for leakage cells. The core matrix has one 16-bit run per cell, followed by the 128-bit residual tests and 512-bit spin repeat.
+- Leakage under other release budgets. We chose 4 s by hand and measured honest use of it, not the leakage trade-off.
+- A limit on a cleverer encoder's achieved leakage. The failure-pattern counts above cover only their specified observation and policy.
