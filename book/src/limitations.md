@@ -15,6 +15,7 @@
 | Power-loss test on the Pi | Update installation still needs testing on the Pi's file system. |
 | Hash-chained log and separate collector | Current logs stay on the device. |
 | Real-size proof support | The wire allows at most 64 KiB, sized for the toy model. Attestable's published figures and FlashProve's examples are megabytes. A real prover needs larger frames, more memory per waiting answer and longer release times. |
+| A maintained kernel | The image uses the Raspberry Pi kernel that Buildroot pins, 6.6.28 from April 2024, so later stable fixes are missing. One of them turns the processor's speculative-execution protections back on by default; the image sets that option itself (from 3 Nov). A real device needs a current kernel and a way to update it. |
 | On-device update delivery | With no login, updates require a new image or offline access to the card. The card's stored state enforces the same replay and rollback rules offline. |
 
 The [failure cap](side-channels/failures.md#what-a-cap-can-do) reduces leakage at a cost in availability. Its bound covers failure patterns only, per boot: restarting resets the in-memory count. Timing needs separate accounting.
