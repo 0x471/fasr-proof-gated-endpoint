@@ -17,7 +17,8 @@ from pge.protocol import PROOF_MAX, Wire
 from pge.service import Policy
 
 PLAIN = ["README.md"] + [f"book/src/{p}.md" for p in
-                         ("introduction", "leakage", "hardening", "limitations", "glossary", "tour")]
+                         ("introduction", "leakage", "hardening", "limitations", "glossary", "tour")] + \
+        sorted(str(p.relative_to(ROOT)) for p in (ROOT / "book/src/side-channels").glob("*.md"))
 REFERENCE = ["docs/ATTACKS.md", "docs/THREAT_MODEL.md", "docs/SERVICE_SPEC.md", "docs/BINDING_SPEC.md"]
 RESULTS = "book/src/results.md"
 
