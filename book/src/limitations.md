@@ -33,6 +33,8 @@ The redesigned spin still needs more data to settle the trace. The existing thre
 
 Every server-to-outside path must cross the endpoint. The shared cable does not enforce that physically. We use one pinned model and circuit, with binding specific to EZKL 23.0.5.
 
+The proof must leave the server no choice about the output. Our test model is deterministic, so it does. Real language models sample their words, run with small numeric differences on GPUs, and may be checked with tolerances. Each of these lets a server choose among valid answers and hide data in the content itself, unless the gate supplies the randomness, an exact integer model is proven with no tolerance, and the stopping point is part of the proof. Our results on timing, order and failures describe what remains after that.
+
 The endpoint binary includes EZKL's verifier. Running each check in its own process contains the verifier's crashes and hangs, but the endpoint cannot detect a verifier that wrongly says ACCEPT. On v1, the signed store supplies the model, domain file and release policy, checked at start. Bundle hashes are re-checked for each proof.
 
 The binary relies on the read-only image, and later on v2 secure boot. The Python reference also trusts its interpreter and EZKL command-line tool. [Proof-system soundness](glossary.md) is assumed and outside scope.
