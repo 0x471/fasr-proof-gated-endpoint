@@ -98,7 +98,7 @@ We scanned each version and recorded its services. The development image had no 
 <!-- ANCHOR: attack-surface -->
 | Version | Seen from outside | Notes |
 |---|---|---|
-| v1.1, 3 Nov night (`b037c669...`, booted on the Pi 3 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped | The endpoint started, so on the device the dm-verity root mounted, every kernel setting read back, the firewall loaded and the endpoint confined itself. 16/16 honest answers ok, each 4000.9-4001.1 ms after it was sent; a flooding server was dropped (4/4 `unavailable`, each at 4.0 s). Kernel options, CPU mitigations and the radio switch-off: checked in the build and in QEMU, not observable on the device |
+| v1.1, 3 Nov night (`b037c669...`, then the freeze candidate `c22954ee...` with pinned file-system ids; both booted on the Pi 3 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped (both) | The endpoint started, so on the device the dm-verity root mounted, every kernel setting read back, the firewall loaded and the endpoint confined itself. 16/16 honest answers ok on each, within 4000.7-4001.4 ms of being sent; a flooding server was dropped (4/4 `unavailable`, each released at its 4 s time). Kernel options, CPU mitigations and the radio switch-off: checked in the build and in QEMU, not observable on the device |
 | v0 (stock OS, 16 Oct) | TCP 22 (ssh) and 8700 (the endpoint); UDP 5353 (mDNS) | 633 packages, 13 running services |
 | v0 (stock OS, 29 Oct, endpoint not running) | TCP 22 only (`nmap -p-`); 691 TCP ports showed as filtered, most likely an artefact of the scan (on the v1 image the same pattern re-probed one by one came back closed); UDP not scanned. On the device: UDP 5353 (mDNS) and two unattributed UDP ports | 633 packages, 13 running services, 66 kernel modules (Wi-Fi and Bluetooth drivers loaded); per-port software in `docs/ATTACK_SURFACE.md` |
 | v1 hardened image (2 Nov, `aa289680...`, booted on the Pi 2 Nov) | TCP 8700 only: 1 open, 0 refused, 65,534 dropped (connect scan of every port from the laptop) | The endpoint started, so both start-up checks passed on the device: firewall rules loaded, module loading switched off. 16/16 honest answers ok, each 4000.8-4002.0 ms after it was sent. Locked-down kernel and no login: checked in the build (`image/build.sh`), not observed on the device (no screen attached, no login by design) |
@@ -111,7 +111,7 @@ We scanned each version and recorded its services. The development image had no 
 
 ### Can another machine reproduce the image?
 
-The first hardened build matched user space apart from build metadata. v1.1 then made the kernel reproducible too, excluding signing-key-dependent files. That 2 Nov v1.1 build never booted on the Pi; the 3 Nov night build did, and has not yet been compared with CI.
+The first hardened build matched user space apart from build metadata. v1.1 then made the kernel reproducible too, excluding signing-key-dependent files. That 2 Nov v1.1 build never booted on the Pi. The 3 Nov night freeze candidate did, and rebuilt from scratch it gives the same image byte for byte on the laptop VM, once the file-system ids that `mkfs` picks at random are pinned (otherwise the root hash differs). It has not yet been compared with CI.
 
 <details><summary>Two independent builds, then the reproducible v1.1 build, 2 Nov</summary>
 
