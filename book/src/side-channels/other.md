@@ -55,7 +55,7 @@ The number and timing of log events still follow the server. Too many stale, dup
 
 ## Verification time
 
-A server could send proofs that are slow to check, or that crash the checker. Each check runs in a separate process with limits and a deadline. Under fixed release, slow checks matter only through the timing trace or by missing the deadline, which makes them failures.
+A server could send proofs that are slow to check, or that crash the checker. Each check runs in a separate process with limits and a deadline. Under fixed release, a slow check can still affect timing; a missed deadline becomes a failure. These controls do not supply a general timing bound.
 
 ## Physical channels
 
