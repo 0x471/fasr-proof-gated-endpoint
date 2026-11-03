@@ -2,8 +2,8 @@
 
 > **In short**
 > - With several questions open, the server can choose which to answer first.
-> - The endpoint releases replies in the order the questions arrived.
-> - The server's chosen order then never reaches the user.
+> - For admitted questions, the endpoint writes replies in admission order.
+> - This removes the server's choice of write order; timing and immediate refusals need separate controls.
 
 ## How the attack works
 
@@ -22,11 +22,11 @@ With k open questions there are k! orders, so a batch carries up to log2(k!) bit
 
 ## The defence: arrival order
 
-The endpoint never passes an answer on just because its proof checked. It gives every admitted question a number in arrival order and holds each checked answer. A reply may leave only when it is the oldest one still waiting. If the oldest question has no answer yet, nothing behind it leaves.
+Under arrival-order or fixed release, the endpoint does not pass an answer on just because its proof checked. It numbers admitted questions, meaning those accepted for processing, and holds checked answers. A reply may leave only when it is the oldest one still waiting. If the oldest question has no answer yet, nothing behind it leaves.
 
-So if the server answers B, then A, then C, the user still receives A, then B, then C. The same rule holds for failures: an `unavailable` for a rejected answer also waits its turn. Otherwise, when a failure appeared would reveal the order.
+So if the server answers B, then A, then C, the endpoint writes A, then B, then C. The same rule holds for failures: an `unavailable` for a rejected answer also waits its turn. Otherwise, its position could reveal the server's chosen order.
 
-A few replies do not wait, because they come from the endpoint, not the server's answer: a `bad_request` for an impossible question, and an immediate refusal when the queue is full. After a halt, new questions are also refused at once (see [Failures](failures.md)).
+Requests refused before admission do not wait. These include `bad_request` for invalid inputs and `unavailable` when the queue is full. After a halt, new questions also get `unavailable` immediately; see [Failures](failures.md#capping-versus-stopping).
 
 ## What we found
 
@@ -34,8 +34,8 @@ Without the defence, the order code got every planted bit through. With arrival 
 
 ## What it costs, and what is left
 
-- **Head-of-line delay.** A slow or silent answer holds up every reply behind it, until its deadline turns it into `unavailable`.
-- **Many connections** were tested in one short run only.
+- **Head-of-line delay.** A slow or silent answer holds up every reply behind it until the deadline produces `unavailable`. Sending can still be late.
+- **Many connections** were tested in one short run only. The endpoint controls write order, but separate connections and reader scheduling can change the order observed outside.
 - **One queue for everyone** means one slow question delays all users. Ordering per user would avoid that, but the server could then choose the order across users. This trade-off is still open.
 
-The rule is checked by the endpoint's state-machine tests, which feed it answers in many different orders and confirm the replies never follow the server.
+The state-machine tests exercise the admission and release rules with different answer orders. They check the endpoint's decisions, not every possible network observation.
