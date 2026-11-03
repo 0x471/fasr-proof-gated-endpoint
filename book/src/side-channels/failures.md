@@ -43,7 +43,13 @@ During a cooldown every admitted reply has the same status. The server has no ch
 
 The cap leaves the server far fewer possible fail-or-ok patterns, and fewer patterns mean fewer bits. A tiny example: four replies with no rule can show any of 16 patterns, which is 4 bits. If at most one of the four may fail, only 5 patterns are possible, about 2.3 bits.
 
-For a hard limit of F failures in N answers, the count is C(N,0) + ... + C(N,F). Here C(N,k) counts the ways to pick k failing answers. This illustrates the counting method; our cooldown rule needs a different count.
+For a hard limit of F failures in N answers, the count is:
+
+```text
+C(N,0) + ... + C(N,F)
+```
+
+Here C(N,k) counts the ways to pick k failing answers. This illustrates the counting method; our cooldown rule needs a different count.
 
 `observer/cap_bound.py` counts every `ok`/`unavailable` sequence our cap allows, starting with an empty history. It follows the cap's state after each possible choice. The base-two logarithm of the count bounds information in those statuses, for any encoding.
 
