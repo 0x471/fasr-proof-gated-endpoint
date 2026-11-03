@@ -18,7 +18,7 @@ The accomplice sends three questions at the same moment: A, B and C. The server 
 
 To send `10`, the server holds all three answers, then sends B first, then A, then C. Every answer has a valid proof. Only the order is chosen.
 
-With k open questions there are k! orders, so a batch carries up to log2(k!) bits. Our test server uses the whole-bit part: 2 bits for 3 questions, 4 bits for 4.
+With k open questions there are k! orders, where k! means k x (k - 1) x ... x 1. Their information is log2(k!) bits: log2 measures how many binary choices distinguish the possibilities. Our test server uses the whole-bit part: 2 bits for 3 questions, 4 bits for 4.
 
 ## The defence: arrival order
 
