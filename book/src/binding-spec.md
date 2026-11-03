@@ -1,7 +1,10 @@
 # Request binding specification
 
 > **In short**
-> - The rules that make a valid proof a proof for **this** question, **this** model and **this** reading of the output: pinned model files, exact input encoding, strict checks on the server's output values.
-> - Each rule comes with the failure it prevents and a test vector. For the plain version, see [Why the endpoint encodes the question itself](tour.md#how-a-proof-is-tied-to-the-question).
+> - Binding connects a valid proof to this question, approved model and interpretation of output.
+> - The rules cover pinned files, exact input encoding and strict output checks.
+> - Each rule records the failure it prevents and a test vector.
+
+For the plain explanation, read [How a proof is tied to the question](tour.md#how-a-proof-is-tied-to-the-question). Use the sections below to check the precise rules and test vectors. Terms are in the [glossary](glossary.md).
 
 {{#include ../../docs/BINDING_SPEC.md:2:}}
