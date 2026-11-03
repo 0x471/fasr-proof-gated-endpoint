@@ -13,6 +13,8 @@ Think of the endpoint as a customs officer checking each parcel against a list o
 
 That is a **side channel**: information carried by behaviour instead of content.
 
+Here the paperwork is a cryptographic proof: evidence that an output matches the approved computation. The hidden message is made of bits, zeros and ones encoded in the server's choices.
+
 ## Who attacks, and what they want
 
 The attacker controls the AI server. It may be a hacker who broke in, or the model itself acting against its owners. It can decide when to answer, in what order, and whether to send a valid proof at all.
