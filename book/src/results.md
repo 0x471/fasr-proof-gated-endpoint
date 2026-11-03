@@ -468,6 +468,21 @@ What does each setting allow, and what does it cost an honest server? A tighter 
 
 The device's setting is window 64, 1 failure, cooldown 64. At a fault rate of one answer in a thousand it loses under half a percent of honest replies; at one in a hundred, about a sixth. Allowing 2 failures with a shorter cooldown loses far fewer honest replies, for about twice the bound. Faults in a real deployment are rarely independent, so this is a guide for choosing, not a prediction. The honest server on the Pi lost no answers under the cap (protocol 3, above).
 
+### From a per-reply bound to time (a model, 3 Nov)
+
+How long would a key take at the bound? The table gives the fewest replies after which the failure pattern could carry 256 or 2,048 bits, counted exactly from an empty cap with `observer/cap_bound.py`'s model. Real codes carry less and need room for errors, so these are lower limits on the time an attacker needs, not estimates.
+
+<!-- ANCHOR: key-time -->
+| Failure policy | Replies before 256 bits could get out | 2,048 bits | 256 bits at 900 replies an hour (one client, 4 s) | 256 bits at 1,000 replies a second |
+|---|---|---|---|---|
+| No cap | 256 | 2,048 | 17 minutes | under a second |
+| Window 64, 1 failure, cooldown 64 (the device's) | 2,200 | 17,879 | 2.4 hours | 2.2 seconds |
+| Window 64, 2 failures, cooldown 32 | 1,071 | 8,707 | 1.2 hours | 1.1 seconds |
+| Window 128, 1 failure, cooldown 128 | 3,645 | 29,750 | 4.0 hours | 3.6 seconds |
+<!-- ANCHOR_END: key-time -->
+
+The cap limits the rate per reply, not the total. At a busy deployment's traffic, a key's worth of bits fits in seconds at the bound, and several endpoints each with their own cap add up. A real budget has to count over time: a limit on failures per hour or per day, or accounting like Petrie, Muhlhauser and Drotos (2026). This is a model of the counted bound only; timing and logs are separate channels.
+
 ## What these results don't show
 
 - Generality across devices, networks or loads. Most tests use one sequential client; ordering uses concurrent requests. Protocols 4 and 5 each add one load or several-client run. Packet sizes and TCP behaviour remain unmeasured.

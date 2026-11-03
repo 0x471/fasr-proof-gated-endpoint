@@ -28,10 +28,11 @@ bits leaked = bits per answer x answers.
 
 The useful question is not how many gigabytes per year, but how long one small secret takes. A key is typically a few hundred bits. Covert channels are noisy, so an attacker needs some redundancy on top.
 
-Examples, using the failure-channel figures on [Measurements](../results.md#how-the-failure-code-scales):
+For the failure channel the bound is counted exactly, so it can be turned into time. With no cap, a failure channel can carry up to one bit per answer, so a short key needs only a few hundred answers. With a cap:
 
-- With no cap, a failure channel can carry up to one bit per answer. A short key then needs only a few hundred answers.
-- With our cap, the limit is a small fraction of a bit per reply. The same key needs thousands of replies, and the attacker loses many answers while trying.
+{{#include ../results.md:key-time}}
+
+The cap slows the leak, but it limits bits **per reply**, not in total. At a lab's traffic, even the tightest setting here passes a key's worth of bits in seconds, at the bound. So a cap alone is not a budget: a real one has to count over time, such as a limit on failures per day. The model's assumptions are on [Measurements](../results.md#from-a-per-reply-bound-to-time-a-model-3-nov).
 
 Timing has no guaranteed limit. The [timing page](timing.md#why-measurements-cannot-prove-timing-is-safe) shows what our data can and cannot rule out.
 
@@ -60,4 +61,5 @@ Checking only a random sample of answers can deter an attacker. It only works if
 - Whether packet details on the wire change with the server's behaviour.
 - How much room real language models leave for choosing among valid answers, and how a gate would supply the randomness.
 - Whether a restart should start the cap in a cooldown.
+- How to count failures over time (per hour or per day) instead of per window, so the total, not only the rate, is bounded.
 - Whether a lab should prefer a cap, which keeps the service up, or stopping, which leaks least.
