@@ -35,7 +35,7 @@ These rates cover one tiny model on a Pi 4 and the hiding methods tried, one cli
 | Version | What it is | Status |
 |---|---|---|
 | v0 | The checking software on the Pi's standard operating system | Done and measured |
-| v1 | Stricter software in Rust (fixed message format, release in arrival order or at a fixed time, a failure cap, a sandboxed checker, fixed-word logs, signed updates) on a stripped-down, read-only system with one open port | Done and measured on the Pi; a rebuild with a locked-down kernel and no login is awaiting its Pi check |
+| v1 | Stricter software in Rust (fixed message format, release in arrival order or at a fixed time, a failure cap, a sandboxed checker, fixed-word logs, signed updates) on a stripped-down, read-only system with one open port | Done and measured on the Pi, including the locked-down image with no login (2 Nov). The v1.1 image, where the endpoint also confines itself, was built on 3 Nov and awaits its Pi check |
 | v2 | Secure boot, two physical ports, a counter against restoring an old update store, signed images | Planned |
 <!-- ANCHOR_END: status -->
 
