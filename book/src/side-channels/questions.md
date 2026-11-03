@@ -14,15 +14,15 @@ The endpoint refused the attack or made it carry nothing, and a test or a run on
 
 ## Why not make every reply take exactly 4 s, verification included?
 
-That is what fixed release does. When a question arrives, the endpoint records an absolute release time: arrival plus 4 s, on a clock that never jumps. The reply leaves at that moment, whenever the check finished. It never computes "4 s minus the verification time", which would carry the check's own variation. See [Timing](timing.md#the-defence-fixed-release).
+That is the target, not an exact-time promise. When the endpoint accepts a question for processing, it sets a deadline using a clock unaffected by wall-clock changes. It never releases that reply before the deadline, but processing or network delays can make it late. See [Timing](timing.md#the-defence-fixed-release).
 
-## The reply always leaves at t + 4 s. Can't the accomplice see that?
+## The target is t + 4 s. Can't the accomplice see that?
 
-Yes, and that is fine. The time is public, but it is the same for every reply. It depends on when the question arrived, not on anything the server did. A channel needs something the server can change; here it changes nothing.
+Yes. The target depends on when the endpoint accepts the question, so it does not carry a secret chosen by the server. Actual arrival can still vary, and that variation is what our [timing tests](timing.md#the-leftover-trace) examine.
 
 ## What if an honest answer takes longer than 4 s?
 
-It misses its time and the user gets `unavailable` at t + 4 s. So the budget must be longer than honest proving and checking. A slower prover needs a longer budget, at the cost of more delay for every user. Deliberate misses are the [failure channel](failures.md).
+If checking is unfinished at the deadline, the user gets `unavailable`, no earlier than t + 4 s. The budget needs to allow honest proving, transport and checking. A slower prover needs a longer budget, at the cost of more delay for every user. Deliberate misses are the [failure channel](failures.md).
 
 ## Why not add a random delay instead?
 

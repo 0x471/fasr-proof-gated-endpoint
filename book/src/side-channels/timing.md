@@ -2,7 +2,7 @@
 
 > **In short**
 > - The server can answer fast or slow on purpose; reply times then carry bits.
-> - Each reply leaves at a fixed time after its question, so its timing no longer follows the server.
+> - Fixed release sets a public target, but the endpoint can still send late.
 > - A tiny trace remained without "spin"; measurements cannot prove a timing channel is gone.
 
 ## How the attack works
@@ -19,17 +19,19 @@ The endpoint cannot simply reject slow answers. Real servers are sometimes slow 
 
 ## The defence: fixed release
 
-Under **fixed release**, each reply leaves at its question's arrival time plus a fixed budget. Our budget is 4 s.
+Under **fixed release**, the endpoint sets a target when it admits a question, meaning it accepts it for processing. The target is admission time plus a fixed budget. Our budget is 4 s.
 
-| Question | Arrives | Answer checked | Reply leaves |
+| Question | Admitted | Answer checked | Earliest release |
 |---|---|---|---|
 | A | t | soon after | t + 4 s |
 | B | t' | much later, but before t' + 4 s | t' + 4 s |
 | C | t'' | not by t'' + 4 s | t'' + 4 s, as `unavailable` |
 
-Fast or slow, the user sees the same delay. The time is public and predictable, and that is the point: it does not depend on anything the server chose. An answer that misses its time becomes a failure, which moves the signal into the [failure channel](failures.md).
+Fast or slow, the server cannot change that target. The endpoint never releases an admitted reply early, but its own processing and the network can delay delivery. There is no latest-send promise.
 
-The endpoint does not compute "4 s minus the verification time". When a question arrives, it records an absolute release time on a clock that never jumps, and waits for that moment.
+If checking has not finished by the deadline, the reply becomes `unavailable`: the [failure channel](failures.md). An `ok` decided before the deadline stays `ok` if fixed release runs late, unless a halt or cap overrides it.
+
+The endpoint does not compute "4 s minus the verification time". At admission it records an absolute target on a monotonic clock, which is unaffected by changes to wall-clock time.
 
 ![Admission fixes the release target; a checked answer or unavailable leaves no earlier than that target](../diagrams/fixed-release.svg)
 
