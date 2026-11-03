@@ -23,7 +23,15 @@ Each check runs in a separate process with [resource limits](tour.md#the-checker
 
 On Linux, the Rust checker then installs a system-call allow-list. It cannot open files or sockets, run programs, start processes or map executable memory. This contains a compromised checker, but cannot detect a wrong verdict: the checker could still say a bad proof passed.
 
-### 4. Write chosen text into replies or logs
+### 4. Take over the endpoint itself
+
+The main process reads every question and every server answer, so a bug there is the most exposed one. Once its sockets, log and model files are open, the device build confines itself.
+
+[Landlock](glossary.md) stops it opening any file and lets it run only its own binary, to start checkers. A system-call allow-list then blocks every call it wasn't traced making, including other kinds of socket and executable memory. If either can't be applied, it refuses to start.
+
+This limits what a takeover can reach, not what it can release. A taken-over endpoint is the gate, so it can send anything to clients. The binary also sits at a fixed address: this Rust target can't build a position-independent static binary. CI checks its other protections: no loader, a non-executable stack, read-only relocations and no writable code. See the [catalogue row](attacks.md#the-client-side-and-the-device-itself) (K53).
+
+### 5. Write chosen text into replies or logs
 
 Users receive proven output or a fixed error. An impossible but well-formed question gets `bad_request`; a server failure gets `unavailable`. Malformed user messages close the connection.
 
@@ -31,7 +39,7 @@ Logs use fixed words, never server text. They still record a counter, a question
 
 Late, repeated and never-requested answers share a log allowance: no more than the number of questions issued. Exceeding it drops the link. See [device-output attacks](attacks.md#the-devices-own-outputs) for the tested rule and remaining client-driven log growth.
 
-### 5. Reach the operating system
+### 6. Reach the operating system
 
 The stock Pi has SSH and other listening services. The v1 image runs one static Rust binary as an unprivileged user on a read-only system. It has one open port, no SSH and no scheduled jobs.
 
@@ -40,10 +48,11 @@ The firewall is built into the kernel; the endpoint refuses to start without its
 - No kernel modules in the image; module loading disabled at boot.
 - Kernel lockdown; no raw-memory, debugger or tracing interfaces.
 - No IPv6, radios, sound or USB.
+- Since 3 Nov: io_uring and terminal line-discipline loading are off, and the endpoint refuses to start unless every kernel setting reads back as written. Not yet booted on the Pi.
 
 It booted on the Pi with both start-up checks passing and only port 8700 answering. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
 
-### 6. Replace the model or policy
+### 7. Replace the model or policy
 
 Signed updates supply model files and release policy. They reject older or repeated updates, updates for another device, and unknown or revoked keys. Their parsers and forward-only rule are fuzzed.
 

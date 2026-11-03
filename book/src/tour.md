@@ -170,7 +170,7 @@ Each version removes ways into the device and is measured the same way. v0 and v
 - Applies the signed update to the store as the device would.
 - Checks that every added option, including kernel options, survived the build.
 
-The 2 Nov rebuild removes login prompts and [locks down the kernel](hardening.md#5-reach-the-operating-system). It booted with both start-up checks passing and only port 8700 reachable.
+The 2 Nov rebuild removes login prompts and [locks down the kernel](hardening.md#6-reach-the-operating-system). It booted with both start-up checks passing and only port 8700 reachable.
 
 A clean-runner build matched user-space files apart from build metadata. v1.1 is reproducible across the laptop and two CI builds, including the kernel, except for signing-key-dependent files. [Measurements](results.md#attack-surface) keeps the comparisons and distinguishes built from boot-tested images.
 

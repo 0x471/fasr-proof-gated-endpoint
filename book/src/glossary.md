@@ -13,6 +13,7 @@
 | SRS | The proof system's public setup file, pinned like the other bundle files. |
 | Request binding | Connecting the proof to the endpoint's question, approved model and interpretation of output. |
 | EZKL | The tool proving and checking our small model. Its source is public. Pinned release 23.0.5 has no licence file; the Apache-2.0 licence was removed in January 2024. |
+| Landlock | A Linux feature that lets a process give up its own access to files. The endpoint uses it to open nothing after start-up. |
 | Parser | Code that reads an incoming message according to its format. |
 | Fuzzing | Testing parsers with random and corrupted messages; accepted messages must re-encode identically. This is not a timing experiment. |
 | TPM | A hardware component whose counter is planned to prevent restoring an older update store. That protection is not built yet. |
