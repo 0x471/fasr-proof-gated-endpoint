@@ -449,6 +449,25 @@ Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. Runs used stock OS, Rust CI b
 | Honest server, same cap as the second row | (no bits planted) | 128 | |
 <!-- ANCHOR_END: cap-vs-halt -->
 
+### Choosing the cap's settings (a model, 3 Nov)
+
+What does each setting allow, and what does it cost an honest server? A tighter cap carries fewer bits but trips on honest faults too. `observer/cap_curves.py` computes both exactly from the cap's reference model, over 4,096 replies from an empty cap. The bound is `observer/cap_bound.py`'s, for any code that uses which replies fail. The cost assumes an honest server whose answers fail independently, at a fault rate of p.
+
+<!-- ANCHOR: cap-settings -->
+| W | F | C | bits per reply, at most | honest replies lost, p = 0.001 | honest replies lost, p = 0.01 |
+|---|---|---|---|---|---|
+| 16 | 1 | 16 | 0.290 | 0.02 % | 1.92 % |
+| 32 | 1 | 32 | 0.186 | 0.09 % | 6.29 % |
+| 64 | 1 | 32 | 0.182 | 0.18 % | 9.20 % |
+| 64 | 1 | 64 | 0.115 | 0.36 % | 16.79 % |
+| 64 | 1 | 128 | 0.078 | 0.71 % | 28.59 % |
+| 64 | 2 | 32 | 0.236 | 0.01 % | 2.73 % |
+| 64 | 2 | 64 | 0.156 | 0.01 % | 5.30 % |
+| 128 | 1 | 128 | 0.070 | 1.31 % | 34.38 % |
+<!-- ANCHOR_END: cap-settings -->
+
+The device's setting is window 64, 1 failure, cooldown 64. At a fault rate of one answer in a thousand it loses under half a percent of honest replies; at one in a hundred, about a sixth. Allowing 2 failures with a shorter cooldown loses far fewer honest replies, for about twice the bound. Faults in a real deployment are rarely independent, so this is a guide for choosing, not a prediction. The honest server on the Pi lost no answers under the cap (protocol 3, above).
+
 ## What these results don't show
 
 - Generality across devices, networks or loads. Most tests use one sequential client; ordering uses concurrent requests. Protocols 4 and 5 each add one load or several-client run. Packet sizes and TCP behaviour remain unmeasured.

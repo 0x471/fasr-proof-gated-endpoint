@@ -47,6 +47,14 @@ In general, a window of N answers with at most F failures allows C(N,0) + C(N,1)
 
 `observer/cap_bound.py` does this counting for the real cap. It counts every reply-status sequence the cap allows, whatever the server does. The logarithm of that count is a true upper limit on the bits, for any code that uses which replies fail. It does not cover timing or logs, which are separate channels.
 
+## Choosing the settings
+
+A tighter cap carries fewer bits, but it also trips on honest faults. A model of both, from the cap's reference rules:
+
+{{#include ../results.md:cap-settings}}
+
+What the model assumes is on [Measurements](../results.md#choosing-the-caps-settings-a-model-3-nov).
+
 ## Capping versus stopping
 
 The alternative to a cap is to **stop**: answer nothing more after the first failure, until someone restarts the endpoint. This leaks least, only where the first failure happened. But it hands the attacker an off switch for the whole service.
