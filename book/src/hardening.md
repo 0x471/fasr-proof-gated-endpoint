@@ -49,7 +49,7 @@ The firewall is built into the kernel; the endpoint refuses to start without its
 - Kernel lockdown; no raw-memory, debugger, tracing or performance-counter interfaces.
 - No IPv6, sound, USB, raw packet sockets, io_uring, hypervisor or 32-bit programs. The radio chip is also switched off in the boot settings.
 - Freed memory is wiped, and the kernel checks its own memory lists.
-- The processor's protections against speculative-execution attacks are on. The pinned kernel left them off by default, and every image before 3 Nov ran that way.
+- The kernel's own protections against speculative-execution attacks are on. The pinned kernel left them off by default, and every image before 3 Nov ran that way. Two of them, against Spectre v2 and v4, need help from the boot firmware, which the Pi 4 doesn't have; even stock Pi OS reports them open.
 - The root file system is checked block by block with [dm-verity](glossary.md). A changed program stops the boot. Without secure boot, though, someone who can rewrite the card can also rewrite the hash it is checked against.
 - Memory-backed folders have size limits and can't run programs.
 - The endpoint refuses to start unless every kernel setting reads back as written.
