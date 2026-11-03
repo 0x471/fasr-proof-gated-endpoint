@@ -130,6 +130,36 @@ def test_requests_on_open_connections_are_answered_while_descriptors_run_out(rus
     asyncio.run(go())
 
 
+def is_static(path):
+    """True if an ELF file has no program interpreter (64-bit little-endian only)."""
+    data = open(path, "rb").read()
+    if data[:4] != b"\x7fELF":
+        return False
+    phoff = int.from_bytes(data[32:40], "little")
+    size, count = int.from_bytes(data[54:56], "little"), int.from_bytes(data[56:58], "little")
+    return all(int.from_bytes(data[phoff + i * size:phoff + i * size + 4], "little") != 3 for i in range(count))
+
+
+@pytest.mark.skipif(not os.path.exists("/proc/self/status"), reason="reads /proc (Linux)")
+def test_the_running_endpoint_is_confined(rust_bin, tiny_bundle, tmp_path):  # noqa: F811
+    if not is_static(rust_bin):
+        pytest.skip("only the static (device) build confines itself")
+
+    async def go():
+        proc, port, logpath, upstream, server = await start(rust_bin, tiny_bundle, tmp_path / "rs")
+        try:
+            assert proc.returncode is None
+            status = dict(line.split(":", 1) for line in open(f"/proc/{proc.pid}/status") if ":" in line)
+            assert status["NoNewPrivs"].strip() == "1" and status["Seccomp"].strip() == "2"
+            # Each proof is still checked in a fresh child after the endpoint confined itself.
+            wire = Wire.for_spec(tiny_bundle.spec)
+            reply, _ = await ask(port, wire)
+            assert reply["ok"]
+        finally:
+            await stop(proc, upstream, server)
+    asyncio.run(go())
+
+
 def cpu_seconds(pid):
     """CPU time used by a process so far, from ps ([[dd-]hh:]mm:ss[.ff], Linux and macOS)."""
     out = subprocess.run(["ps", "-o", "time=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
