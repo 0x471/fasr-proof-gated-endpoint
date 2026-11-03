@@ -54,7 +54,7 @@ The firewall is built into the kernel; the endpoint refuses to start without its
 - Memory-backed folders have size limits and can't run programs.
 - The endpoint refuses to start unless every kernel setting reads back as written.
 
-The 2 Nov image booted on the Pi with its start-up checks passing and only port 8700 answering. The 3 Nov night image, with everything above, has so far booted only in an emulator of the Pi 4. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
+The 3 Nov night image, with everything above, booted on the Pi with its start-up checks passing and only port 8700 answering. With one bit of a program changed on the card, the Pi didn't come up; [Measurements](results.md#does-the-root-check-stop-a-changed-card-3-nov-night) has the test. [Measurements](results.md#attack-surface) separates these observations from properties checked only during the build.
 
 ### 7. Replace the model or policy
 
