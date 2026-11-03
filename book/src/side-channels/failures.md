@@ -57,7 +57,7 @@ A registered test on the Pi compared both:
 
 Every run matched the cap's reference model reply for reply. The honest server lost nothing under the cap. Answers were lost only while an attacker kept causing failures. Full conditions are in [Measurements](../results.md#failure-cap-versus-stopping-2-nov-protocol-3).
 
-Which to choose is a policy decision. A cap keeps the service running and raises an alarm. Stopping blocks everything until a person steps in. That depends on whether losing service or losing a secret is worse.
+Which to choose is a policy decision. A cap keeps the service running and logs each trip, which an operator could turn into an alarm; the log is not yet sent off the device. Stopping blocks everything until a person steps in. That depends on whether losing service or losing a secret is worse.
 
 ## Restarts
 
