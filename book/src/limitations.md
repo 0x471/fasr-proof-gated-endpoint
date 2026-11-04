@@ -16,6 +16,7 @@
 | Hash-chained log and separate collector | Current logs stay on the device. |
 | Real-size proof support | The wire allows at most 64 KiB, sized for the toy model. Attestable's published figures and FlashProve's examples are megabytes. A real prover needs larger frames, more memory per waiting answer and longer release times. |
 | A maintained kernel | The image uses the Raspberry Pi kernel that Buildroot pins, 6.6.28 from April 2024, so later stable fixes are missing. One of them turns the kernel's speculative-execution protections back on by default; the image sets that option itself (from 3 Nov). Spectre v2 and v4 stay open on the Pi 4 whatever the kernel, because its boot firmware offers no call to mitigate them. A real device needs a current kernel and a way to update it. |
+| Noticing a dead server connection | After the cable to the laptop was pulled mid-run and later restored (4 Nov), the endpoint never redialled the test server until the Pi was restarted. Most likely its old connection was left half open: there was nothing to send, and it uses no keepalive. A keepalive or heartbeat is planned; the cause is not yet reproduced. |
 | On-device update delivery | With no login, updates require a new image or offline access to the card. The card's stored state enforces the same replay and rollback rules offline. |
 
 The [failure cap](side-channels/failures.md#what-a-cap-can-do) reduces leakage at a cost in availability. Its bound covers failure patterns only, per boot: restarting resets the in-memory count. Timing needs separate accounting.
@@ -23,12 +24,12 @@ The [failure cap](side-channels/failures.md#what-a-cap-can-do) reduces leakage a
 ## Not settled by measurement
 
 - A capacity bound for arbitrary hiding methods and observers. Planted-bit rates and one binned information statistic are insufficient. Testing the estimator against known synthetic channels does not provide such a bound. Measurements alone can't give one: [what the timing data can rule out](results.md#what-the-timing-data-can-rule-out-3-nov-analysis-of-earlier-runs) shows how slowly that limit falls with more answers.
-- Load and several clients. One overlapping check per release was not detected; one three-client run was inconclusive. Stacked checks, flooding, longer three-client tests and outside packet captures remain undone.
+- Load and several clients. One overlapping check per release was not detected; two three-client runs were inconclusive, the second with six times the answers. Stacked checks and flooding remain untested.
 - Queue pressure. Under fixed release, with halt off, a state-machine test shows that server choices do not determine which requests are refused for a full queue (logged `busy`, sent as `unavailable`). Arrival order remains open. The event loop's own delays under load remain an unresolved part of that channel.
 - The budget trade-off. Fixed release used 4 s. Honest use of that budget is measured for one and three clients; leakage under other budgets is not.
 - The timing trace's cause. Candidates include waking from idle and processor-speed changes under load. The image defaults to the lowest processor speed, which may explain its result; this has not been isolated.
 
-The redesigned spin still needs more data to settle the trace. The existing three-client run does not settle it either. Read the [spin verdict](results.md#what-fixed-release-leaves) and [load results](results.md#load-and-several-clients-on-the-hardened-image-2-nov-protocols-4-and-5) with their conditions.
+The redesigned spin still needs more data to settle the trace. The three-client runs don't settle it either. Read the [spin verdict](results.md#what-fixed-release-leaves) and [load results](results.md#load-and-several-clients-on-the-hardened-image-2-nov-protocols-4-and-5) with their conditions.
 
 ## What must be trusted
 
