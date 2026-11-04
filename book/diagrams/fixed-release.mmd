@@ -7,7 +7,7 @@ sequenceDiagram
     E->>S: Question
     S-->>E: Answer and proof, or no answer
     Note over E: Check proof.<br/>Keep due fixed.
-    Note over E: Wake 5 ms early.<br/>Spin until due.
+    Note over E: Wake ~5 ms early.<br/>Spin up to 5 ms.
     alt Valid answer checked by due
         E-->>U: Proven output
     else Not checked in time, or invalid
