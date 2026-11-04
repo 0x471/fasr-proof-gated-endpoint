@@ -89,7 +89,10 @@ The limit falls only about as fast as the number of answers grows: halving it ne
 
 ## Two routes to a real bound
 
-1. **Remove the server's influence by design.** Fixed release is the first step. The next is a release stage that cannot see what the checker or the server did, such as its own processor core or a separate small chip that only holds the schedule. We plan to test running the release loop on its own core.
+1. **Remove the server's influence by design.** Fixed release is the first step. The next is a release stage that cannot see what the checker or the server did, such as its own processor core or a separate small chip that only holds the schedule. A first test of running the release loop on its own core found nothing to remove: without spin, this image showed no trace either way.
+
+{{#include ../results.md:own-cpu}}
+
 2. **Charge for what is left.** Petrie, Muhlhauser and Drotos (2026) have the server commit in advance to a predicted spread of reply times, and charge each observed time against a budget of leaked bits. Their design also groups replies into fixed time windows.
 
 The two routes combine well: the better the design removes timing freedom, the less there is to charge.

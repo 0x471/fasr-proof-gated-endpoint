@@ -389,6 +389,29 @@ It bounds the encoder each run used, read as a mean shift, under a Gaussian nois
 
 </details>
 
+### Giving the release loop its own CPU (3 Nov, protocol 7)
+
+Does the residue go away when the event loop has a CPU of its own and every proof check runs on the others? Pre-registered in `docs/EXPERIMENT_PROTOCOL_4.md`: the experiment image (`36b18e84...`, fixed release, 4 s, spin 0), one client, 256 answers per run with the 1 s timing code, and an honest control per condition. The two conditions differ only in the kernel command line.
+
+<!-- ANCHOR: own-cpu -->
+| Condition | Held-out errors, two halves | Held-out p | Control p | Mean difference (p) | Verdict |
+|---|---|---|---|---|---|
+| Shared (as built) | 0.45 / 0.48 | 0.32 | 0.57 | -0.10 ms (0.17) | not detected |
+| Isolated (`isolcpus=3`, release loop on CPU 3) | 0.53 / 0.52 | 0.86 | 0.14 | -0.006 ms (0.93) | not detected |
+<!-- ANCHOR_END: own-cpu -->
+
+The reading was fixed in advance: with nothing detected under shared, the isolated condition can't show an improvement, so the question stays open. Unlike the stock system earlier, this hardened image showed no residue at spin 0 at this sample size; protocol 2 is the registered test of why.
+
+<details><summary>Secondary measures, captures and deviations</summary>
+
+- Mutual information with 4 bins: about zero in both (p = 0.61 shared, 0.59 isolated).
+- `observer/shift_bound.py`: the data allow a shift of up to 0.25 ms (shared) and 0.15 ms (isolated), at most 0.063 and 0.017 bit per answer under the Gaussian model.
+- Packets, shared condition: every reply in one 38-byte packet, TTL 64, the same TCP window in the timing and the honest run. The isolated capture is analysed once it is closed.
+- Deviations, declared before analysis: one capture per condition instead of one per run, and about 1.5 minutes of the honest shared run (16 of 256 replies) uncaptured after a capture was restarted under the same file name. `observer/pcap_trace.py --partial` reads the capture that starts mid-connection.
+- From outside, the run can't show that the kernel kept CPU 3 free of other tasks, only that the endpoint started with its placement, which it refuses to do otherwise.
+
+</details>
+
 ### Random sleeps instead of a fixed release time (a model, 2 Nov)
 
 Does adding random delay hide the server's chosen delay? In this model, it keeps leaking; fixed release gives no timing signal. This is not a device measurement.

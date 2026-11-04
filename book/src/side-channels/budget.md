@@ -56,7 +56,7 @@ Checking only a random sample of answers can deter an attacker. It only works if
 
 ## What is still open
 
-- What causes the remaining timing trace, and whether a release stage on its own processor core removes it.
+- What causes the remaining timing trace. On the hardened image a first test found no trace without spin, with or without a core of its own, so whether a separate core removes it is still untested where a trace exists.
 - Whether several users at once open a timing channel. A larger registered test is planned.
 - Whether packet details on the wire change with the server's behaviour.
 - How much room real language models leave for choosing among valid answers, and how a gate would supply the randomness.
