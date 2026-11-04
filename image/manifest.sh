@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Lists every file in an SD-card image, one line each: partition, type, mode, owner, sha256 (or link
 # target), path. Two builds can then be compared with diff; file times and file-system IDs are left out.
+# Partition 4, the dm-verity hash tree, has no file system: one line with its sha256.
 # Usage (Linux, as root: it mounts each partition read-only): image/manifest.sh sdcard.img > files.txt
 set -euo pipefail
 IMG=$1
@@ -11,12 +12,15 @@ cleanup() { umount "$MNT" 2>/dev/null || true; rmdir "$MNT"; losetup -d "$LOOP";
 trap cleanup EXIT
 udevadm settle 2>/dev/null || true
 parts=("$LOOP"p*)
-[ "${#parts[@]}" = 3 ] || { echo "expected 3 partitions, found ${#parts[@]}" >&2; exit 1; }
+[ "${#parts[@]}" = 4 ] || { echo "expected 4 partitions, found ${#parts[@]}" >&2; exit 1; }
 for part in "${parts[@]}"; do
   n="p${part##*p}"
   case "$(blkid -o value -s TYPE "$part")" in
     ext4) opts=ro,noload ;;
     vfat) opts=ro ;;
+    '') [ "$n" = p4 ] || { echo "$n: no file system" >&2; exit 1; }
+        printf '%s r - - %s -\n' "$n" "$(sha256sum < "$part" | cut -d' ' -f1)"
+        continue ;;
     *) echo "$n: unexpected file system" >&2; exit 1 ;;
   esac
   mount -o "$opts" "$part" "$MNT"
