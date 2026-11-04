@@ -68,3 +68,15 @@ def test_a_reply_for_an_id_never_requested_is_refused():
     r0, a5 = frame(WIRE.encode_request(0, X)), frame(WIRE.reply_ok(5, [[0.0, 0.0, 0.0]]))
     with pytest.raises(ValueError):
         analyse(capture([packet(1.0, False, 1, r0), packet(5.0, True, 1, a5)]))
+
+
+def test_a_capture_started_mid_connection_needs_partial():
+    r1 = frame(WIRE.encode_request(1, X))
+    a0, a1 = frame(WIRE.reply_ok(0, [[1.0, 2.0, 3.0]])), frame(WIRE.reply_ok(1, [[1.0, 2.0, 3.0]]))
+    # The request for id 0 was sent before the capture started; only its reply is in it.
+    pkts = [packet(14.0, True, 7000, a0), packet(15.0, False, 2000, r1), packet(19.0, True, 7000 + len(a0), a1)]
+    with pytest.raises(ValueError):
+        analyse(capture(pkts))
+    summary, trace = analyse(capture(pkts), partial=True)
+    assert summary["replies_to_uncaptured_requests"] == 1 and summary["replies"] == 1
+    assert [r["elapsed_ms"] for r in trace] == [4000.0]

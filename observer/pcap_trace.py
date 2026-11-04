@@ -96,7 +96,10 @@ class Stream:
         return len(new)
 
 
-def analyse(data: bytes, port: int = 8700) -> tuple[dict, list[dict]]:
+def analyse(data: bytes, port: int = 8700, partial: bool = False) -> tuple[dict, list[dict]]:
+    """partial: the capture started after a connection did; replies to requests it didn't see are
+    skipped and counted instead of refused. Reassembly then starts at the first packet seen, so this
+    only reads correctly when packets carry whole frames (frames_completed_per_payload_packet)."""
     streams = collections.defaultdict(Stream)
     per_reply_packets = collections.Counter()
     out_sizes, flags_seen, ttls, windows = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
@@ -114,7 +117,7 @@ def analyse(data: bytes, port: int = 8700) -> tuple[dict, list[dict]]:
             if s.add(t, seq, payload):
                 out_sizes[len(payload)] += 1
                 per_reply_packets[len(s.frames) - before] += 1
-    rows = []
+    rows, unmatched = [], 0
     for (conn, inbound), s in list(streams.items()):
         if not inbound:
             continue
@@ -128,6 +131,9 @@ def analyse(data: bytes, port: int = 8700) -> tuple[dict, list[dict]]:
                 raise ValueError("an endpoint frame that isn't a reply")
             rid = struct.unpack(">Q", body[1:9])[0]
             if rid not in sent:
+                if partial:
+                    unmatched += 1
+                    continue
                 raise ValueError(f"a reply for id {rid}, which wasn't requested on that connection")
             rows.append({"sent": sent[rid], "conn": conn, "rid": rid, "elapsed_ms": round((t - sent[rid]) * 1000, 3),
                          "ok": body[9] == 0})
@@ -138,6 +144,8 @@ def analyse(data: bytes, port: int = 8700) -> tuple[dict, list[dict]]:
                "frames_completed_per_payload_packet": dict(sorted(per_reply_packets.items())),
                "tcp_flags_from_endpoint": {f"0x{k:02x}": v for k, v in sorted(flags_seen.items())},
                "ttl_from_endpoint": dict(sorted(ttls.items())), "distinct_windows_from_endpoint": len(windows)}
+    if partial:
+        summary["replies_to_uncaptured_requests"] = unmatched
     return summary, trace
 
 
@@ -146,8 +154,9 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("capture")
     ap.add_argument("--port", type=int, default=8700)
     ap.add_argument("--trace")
+    ap.add_argument("--partial", action="store_true", help="the capture started mid-connection")
     a = ap.parse_args(argv)
-    summary, trace = analyse(open(a.capture, "rb").read(), a.port)
+    summary, trace = analyse(open(a.capture, "rb").read(), a.port, a.partial)
     if a.trace:
         with open(a.trace, "w") as f:
             f.writelines(json.dumps(r) + "\n" for r in trace)
