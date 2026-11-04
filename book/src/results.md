@@ -494,7 +494,7 @@ The reading was fixed in advance: inconclusive again means the question stays op
 - During the timing run the laptop's network bridge to the Pi went away for about 7 seconds. The three replies of round 238 arrived 10.8 s after they were sent instead of about 4 s; every answer was still ok and the run counted under the rule. The exploratory row drops that round from both runs.
 - The first honest run was cut off when the cable was unplugged. Afterwards the endpoint did not reconnect to the test server, most likely because its old connection was left half open with nothing to send; the Pi was restarted and the control ran about an hour after the timing run, on a fresh boot. All of this was recorded before any analysis.
 - Mutual information with 4 bins: p = 0.03 with all answers, 0.056 without the delayed round; the control was clean (p = 0.34 and 0.41).
-- Packets: every reply was one 38-byte packet with TTL 64 and the same TCP window, in the timing run and in the honest runs. The timing capture holds 1,143 of the run's 1,536 replies (the outage and a restart left gaps).
+- Packets: every reply was one 38-byte packet with TTL 64 and the same TCP window, in the timing run and in the honest runs. The timing capture holds 1,143 of the run's 1,536 replies (the outage and a restart left gaps); the counted honest run was captured in full.
 
 </details>
 
