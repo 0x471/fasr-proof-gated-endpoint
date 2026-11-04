@@ -49,3 +49,5 @@ Each run takes about 17-20 minutes (256 answers at 4 s).
 
 ## Notes before the first run
 - 3 Nov, before any run: the experiment image is sha256 `36b18e8489d5bc3e12df0fc37c573f72af2f64e472f52a1f1e476fc04c1003c9`: the v1.1 build of `a438202`'s `image/` with the endpoint built from `e533f8d` (static musl, sha256 `788e3262...9818`, not a CI build) and the spin-0 policy. Its Linux tests passed, including a mutant without the filter's `sched_setaffinity` rule, which the placement test caught.
+- 3 Nov 23:20, declared before any analysis: one capture per condition instead of one per run (the operator was away and restarting `sudo tcpdump` needs him); the runs were chained by a script that repeats a run in full if it doesn't count. Then a capture was stopped and restarted twice during honest_shared, the last time under a name already in use, which overwrote about 1.5 minutes of it (how many replies: Measurements). Packet analysis uses what was captured and reports the gap.
+- 4 Nov: all four runs counted on the first attempt. Results: Measurements, "Giving the release loop its own CPU".
