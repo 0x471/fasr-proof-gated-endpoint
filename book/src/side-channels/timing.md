@@ -59,8 +59,8 @@ Fixed release stopped our one-second code, but a much finer test found a trace:
 
 The reply targets were fixed, but observed times differed. Our leading explanation concerns how the processor acts on those targets. It is not proven:
 
-- For a 1, the server answered late, so the endpoint had just been checking that proof. The processor was busy and awake when the release time came.
-- For a 0, the server answered early. The processor may have entered a deeper rest during the wait and taken longer to wake.
+- For a 1, the server answered a second later, so the endpoint finished checking that proof later. When the release time came, the processor had idled for a second less.
+- For a 0, the server answered early, so the processor had idled longer. It may have entered a deeper rest and taken longer to wake.
 
 A second possibility is that processor speed changed with load. Neither mechanism was isolated by these runs, so neither is an established cause.
 
