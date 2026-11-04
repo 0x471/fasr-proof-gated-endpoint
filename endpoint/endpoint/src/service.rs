@@ -493,7 +493,10 @@ pub fn run(mut config: Config) -> Result<(), String> {
         if let Some(rx) = &connecting {
             if let Ok(result) = rx.try_recv() {
                 connecting = None;
-                match result.and_then(Connection::new) {
+                match result.and_then(|s| {
+                    crate::network::keep_alive(&s)?;
+                    Connection::new(s)
+                }) {
                     Ok(c) => {
                         endpoint.server = Some(c);
                         was_connected = true;

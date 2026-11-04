@@ -120,3 +120,83 @@ impl Connection {
         Ok(())
     }
 }
+
+/// The server connection has to notice a dead peer even when it has nothing to send: after a silent
+/// outage it would otherwise stay "connected" and never redial. Probes start after 5 s idle, every
+/// 2 s, and 3 missed ones or 10 s of unacknowledged data end the connection (Linux).
+pub fn keep_alive(stream: &TcpStream) -> io::Result<()> {
+    set(stream, libc::SOL_SOCKET, libc::SO_KEEPALIVE, 1)?;
+    #[cfg(target_os = "linux")]
+    for (name, value) in [
+        (libc::TCP_KEEPIDLE, 5),
+        (libc::TCP_KEEPINTVL, 2),
+        (libc::TCP_KEEPCNT, 3),
+        (libc::TCP_USER_TIMEOUT, 10_000),
+    ] {
+        set(stream, libc::IPPROTO_TCP, name, value)?;
+    }
+    Ok(())
+}
+
+fn set(
+    stream: &TcpStream,
+    level: libc::c_int,
+    name: libc::c_int,
+    value: libc::c_int,
+) -> io::Result<()> {
+    // The value outlives the call, and setsockopt copies it.
+    let size = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    let r = unsafe {
+        libc::setsockopt(
+            stream.as_raw_fd(),
+            level,
+            name,
+            (&value as *const libc::c_int).cast(),
+            size,
+        )
+    };
+    if r != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+
+    fn get(stream: &TcpStream, level: libc::c_int, name: libc::c_int) -> libc::c_int {
+        let (mut value, mut size) = (
+            0 as libc::c_int,
+            std::mem::size_of::<libc::c_int>() as libc::socklen_t,
+        );
+        let r = unsafe {
+            libc::getsockopt(
+                stream.as_raw_fd(),
+                level,
+                name,
+                (&mut value as *mut libc::c_int).cast(),
+                &mut size,
+            )
+        };
+        assert_eq!(r, 0);
+        value
+    }
+
+    #[test]
+    fn server_connections_probe_a_silent_peer() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        assert_eq!(get(&stream, libc::SOL_SOCKET, libc::SO_KEEPALIVE), 0);
+        keep_alive(&stream).unwrap();
+        assert_eq!(get(&stream, libc::SOL_SOCKET, libc::SO_KEEPALIVE), 1);
+        assert_eq!(get(&stream, libc::IPPROTO_TCP, libc::TCP_KEEPIDLE), 5);
+        assert_eq!(get(&stream, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL), 2);
+        assert_eq!(get(&stream, libc::IPPROTO_TCP, libc::TCP_KEEPCNT), 3);
+        assert_eq!(
+            get(&stream, libc::IPPROTO_TCP, libc::TCP_USER_TIMEOUT),
+            10_000
+        );
+    }
+}
