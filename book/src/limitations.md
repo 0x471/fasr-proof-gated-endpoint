@@ -34,7 +34,7 @@ The redesigned spin still needs more data to settle the trace. The existing thre
 
 Every server-to-outside path must cross the endpoint. The shared cable does not enforce that physically. We use one pinned model and circuit, with binding specific to EZKL 23.0.5.
 
-The proof must leave the server no choice about the output. Our test model is deterministic, so it does. Real language models sample their words, run with small numeric differences on GPUs, and may be checked with tolerances. Each of these lets a server choose among valid answers and hide data in the content itself, unless the gate supplies the randomness, an exact integer model is proven with no tolerance, and the stopping point is part of the proof. Our results on timing, order and failures describe what remains after that.
+The proof must leave the server no choice about the output. Our test model is deterministic, so it does. Real language models sample their output, may run with small numeric differences on GPUs, and may be checked with tolerances. Where the proof accepts several outputs and the server can pick among them, the content itself can carry data. Removing that choice needs fixed arithmetic, randomness the server can't choose, fixed settings and a proven stopping rule; the alternative is to bound the information left. Our results on timing, order and failures describe what remains after that. See [Choosing among valid answers](side-channels/answer-choice.md).
 
 The endpoint binary includes EZKL's verifier. Running each check in its own process contains the verifier's crashes and hangs, but the endpoint cannot detect a verifier that wrongly says ACCEPT. On v1, the signed store supplies the model, domain file and release policy, checked at start. Bundle hashes are re-checked for each proof.
 
@@ -48,7 +48,7 @@ Build machines must be uncompromised. CI builds the binary from pinned sources; 
 
 Physical attacks, including power, electromagnetic, acoustic and thermal channels. Also extraction through ordinary correct answers and the proof system's soundness.
 
-A model that itself hides messages in its correct answers is also out of scope. The proof shows that the approved model produced an answer, not that the model is harmless, so the endpoint must release it. Language models can learn such hidden encodings ([Karpov et al., 2025](https://arxiv.org/abs/2505.03439)). Monitoring the outputs or the model is a separate defence. This differs from a hacked server choosing among a sampling model's valid answers, which the endpoint could prevent by supplying the randomness itself; our test model is deterministic, so that case wasn't measured.
+A model that itself hides messages in its correct answers is also out of scope. The proof shows that an answer is consistent with the approved computation, not which software actually ran or that the model is harmless, so the endpoint must release it. Language models can learn such hidden encodings ([Karpov et al., 2025](https://arxiv.org/abs/2505.03439)). Monitoring the outputs or the model is a separate defence. This differs from a hacked server choosing among a sampling model's valid answers, which fixing the randomness, settings and arithmetic could prevent; our test model is deterministic, so that case wasn't measured.
 
 ## Open questions
 
