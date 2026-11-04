@@ -486,9 +486,9 @@ Pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. Runs used stock OS, Rust CI b
 | Failure policy | Planted bits read back (of 32) | Answers ok (of 128) | At most, for any failure code (`observer/cap_bound.py`) |
 |---|---|---|---|
 | No cap | 32 (no errors) | 120 | 128 bits (one per answer) |
-| Cap: 1 failure per 64 replies, then 64 unavailable | 8 | 54 | 19.48 bits |
-| Cap: 2 failures per 64 replies, then 32 unavailable | 12 | 62 | 34.99 bits |
-| Stop after the first failure | none (the first answer failed, and nothing was answered after it) | 0 | the stopping position: at most log2(129) = 7.0 bits, once, until someone restarts it |
+| Cap: a 2nd failure within 64 replies starts 64 unavailable | 8 | 54 | 19.48 bits |
+| Cap: a 3rd failure within 64 replies starts 32 unavailable | 12 | 62 | 34.99 bits |
+| Stop after the first failure | none (the first answer failed; every later reply was `unavailable`) | 0 | the stopping position: at most log2(129) = 7.0 bits, once, until someone restarts it |
 | Honest server, same cap as the second row | (no bits planted) | 128 | |
 <!-- ANCHOR_END: cap-vs-halt -->
 

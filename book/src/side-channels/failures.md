@@ -73,8 +73,6 @@ A registered test on the Pi compared both:
 
 {{#include ../results.md:cap-vs-halt}}
 
-In the halt row, "nothing was answered" means no successful answers; `unavailable` replies continue.
-
 Each capped run matched the reference model reply for reply. No answers were lost in the single honest control run. That does not show that honest faults could never trigger a cooldown. Full conditions are in [Measurements](../results.md#failure-cap-versus-stopping-2-nov-protocol-3).
 
 Which to choose is a policy decision. A cap resumes successful service after a cooldown and records a trip in the log; alerts are not built. A halt prevents successful replies until restart. The choice depends on whether losing service or losing a secret is worse.
