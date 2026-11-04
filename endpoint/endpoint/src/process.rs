@@ -397,7 +397,8 @@ pub fn sandbox() -> io::Result<()> {
 pub fn reserve_cpu(cpu: usize) -> io::Result<Vec<usize>> {
     // A zeroed cpu_set_t is the empty set; sched_*affinity only read and write the set given.
     let mut set: libc::cpu_set_t = unsafe { std::mem::zeroed() };
-    if unsafe { libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) } != 0 {
+    if unsafe { libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) } != 0
+    {
         return Err(io::Error::last_os_error());
     }
     let allowed: Vec<usize> = (0..libc::CPU_SETSIZE as usize)
@@ -711,7 +712,9 @@ mod tests {
                 } else if libc::sched_setaffinity(0, size, &cpus) != 0 {
                     // A thread may move itself between CPUs (--release-cpu), not anyone else.
                     9
-                } else if libc::sched_setaffinity(parent, size, &cpus) != -1 || errno() != libc::EPERM {
+                } else if libc::sched_setaffinity(parent, size, &cpus) != -1
+                    || errno() != libc::EPERM
+                {
                     10
                 } else {
                     0

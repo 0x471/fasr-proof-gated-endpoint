@@ -450,7 +450,9 @@ pub fn run(mut config: Config) -> Result<(), String> {
     // With --release-cpu the event loop keeps that CPU; every thread it starts moves to the others,
     // and the checkers they start inherit that.
     let others = match endpoint.config.release_cpu {
-        Some(cpu) => Some(crate::process::reserve_cpu(cpu).map_err(|e| format!("release cpu: {e}"))?),
+        Some(cpu) => {
+            Some(crate::process::reserve_cpu(cpu).map_err(|e| format!("release cpu: {e}"))?)
+        }
         None => None,
     };
     let exe = std::env::current_exe().map_err(|_| "own binary")?;
@@ -539,7 +541,9 @@ pub fn run(mut config: Config) -> Result<(), String> {
                         // experiment that asked for it, so it counts as a verifier error.
                         let verdict = match &cpus {
                             Some(cpus) if crate::process::pin(cpus).is_err() => Verdict::Error,
-                            _ => crate::verify_job(bundle, job.data, Duration::from_nanos(left), len),
+                            _ => {
+                                crate::verify_job(bundle, job.data, Duration::from_nanos(left), len)
+                            }
                         };
                         let _ = tx.send((job.seq, verdict));
                         let _ = (&*wake).write(&[1]);

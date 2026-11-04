@@ -180,7 +180,12 @@ impl Config {
             idle,
             release_cpu: map
                 .get("--release-cpu")
-                .map(|s| s.parse::<usize>().ok().filter(|&c| c < 1024).ok_or("invalid cpu"))
+                .map(|s| {
+                    s.parse::<usize>()
+                        .ok()
+                        .filter(|&c| c < 1024)
+                        .ok_or("invalid cpu")
+                })
                 .transpose()?,
         })
     }
