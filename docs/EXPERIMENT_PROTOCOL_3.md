@@ -39,3 +39,7 @@ python3 observer/shift_bound.py runs/p6/timing_c3.ordered.jsonl $B6 --per-hour 2
 for r in timing_c3 honest_c3; do python3 observer/pcap_trace.py runs/p6/$r.pcap --trace runs/p6/$r.pcap.jsonl > runs/p6/$r.pcap.summary.json; done
 ```
 Each run takes about 35-40 minutes (512 rounds at 4 s, three answers per round).
+
+## Notes before the first run
+- 4 Nov, before any run: the image is the freeze candidate for the agent red team, `c22954ee8801304b6bce1829cfbca0f80972a07cc0375ba19668583548ddca90` (`image/` of `c6e4bb4`, CI endpoint binary of `00d2899`, signed policy: fixed release, 4 s, 5 ms spin, no cap, no halt, read from the image). The freeze itself (tag) comes later; the image does not change.
+- Captures: one `tcpdump` capture covers both runs (timing, then honest, run back to back by a script), instead of one per run. The runs use separate connections, so the capture is split by connection before `observer/pcap_trace.py`. A run that doesn't count under the rule above is repeated in full by the same script.
