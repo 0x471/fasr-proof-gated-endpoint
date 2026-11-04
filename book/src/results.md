@@ -371,7 +371,7 @@ The 128-answer runs rounded times to 0.1 ms, leaving only 19-30 distinct values 
 "Not detected" is not "small". This asks how large a shift between bit-1 and bit-0 answers each fixed-release run still allows, and what such a shift could carry. Tool: `observer/shift_bound.py`. It takes a 95% bootstrap interval for the mean shift and a robust noise estimate, then applies the Gaussian channel formula at the larger end of the interval.
 
 <!-- ANCHOR: timing-limits -->
-| Run | Answers | Shift (ms) | 95% interval (ms) | Noise (ms) | At most (bit/answer) |
+| Run | Answers | Shift (ms) | 95% interval (ms) | Noise (ms) | Model-based upper estimate (bit/answer) |
 |---|---|---|---|---|---|
 | Stripped image, spin, timing code (30 Oct) | 512 | -0.018 | -0.046 to +0.009 | 0.093 | 0.042 |
 | Its honest control, same labels | 512 | +0.078 | -0.081 to +0.343 | 0.227 | 0.33 |
@@ -381,7 +381,7 @@ The 128-answer runs rounded times to 0.1 ms, leaving only 19-30 distinct values 
 
 At one client and 4 s per answer, 0.042 bit/answer is about 38 bits per hour. The honest control comes out higher than the signal run: one 28.6 ms late answer widens its interval. These numbers measure what the data can rule out, not leakage.
 
-The limit falls roughly as 1/n: the interval narrows as the square root of the answer count, and the bits grow with the square of the shift. Reaching 0.001 bit/answer would take about 40 times the answers, about 22 hours of Pi time at one client.
+Near zero shift and with comparable noise, the estimate falls roughly as 1/n: the interval narrows as the square root of the answer count, and the bits grow with the square of the shift. Reaching 0.001 bit/answer would take about 40 times the answers, about 22 hours of Pi time at one client.
 
 <details><summary>What this does and doesn't bound</summary>
 
@@ -462,7 +462,7 @@ Both tests were pre-registered in `docs/EXPERIMENT_PROTOCOL_2.md`. They used ima
 <!-- ANCHOR: load-and-clients -->
 | Protocol | Runs | Held-out decoder (signal / control) | Secondary | Verdict (rule fixed in advance) |
 |---|---|---|---|---|
-| 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | not detected: one overlapping check per release doesn't move releases on this image at n = 256 |
+| 4: a proof check timed to overlap a release, one per second | `load_bits` and the zero-bit control, 256 answers each | errors 0.50 / 0.51, null p = 0.58; control 0.51 / 0.51, p = 0.65 | mean difference -0.05 ms (p = 0.80); mutual information -0.004 bit per answer (p = 0.68) | not detected by the registered decoder in this run: one overlapping check per release, on this image, at n = 256 |
 | 5: the 0.1 s timing code from three clients at once | `timing_c3` and the honest control, 86 rounds = 258 answers each | errors 0.50 / 0.39, null p = 0.0175; control 0.50 / 0.55, p = 0.75 | mean difference +0.06 ms (p = 0.11); mutual information -0.006 bit per answer (p = 0.85) | inconclusive: one half of the held-out test decoded better than chance and the other didn't; the secondary measures show nothing |
 <!-- ANCHOR_END: load-and-clients -->
 
