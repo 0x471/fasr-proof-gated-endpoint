@@ -85,7 +85,11 @@ A server could also try to delay releases indirectly: time its answers so that a
 
 Each was one run with one control. Stacked proof checks, floods and competing work on the same core were not tested. Packet captures were not taken.
 
-A longer three-user test with roughly six times the answers is registered as protocol 6 (`docs/EXPERIMENT_PROTOCOL_3.md`). It has no reported result in this snapshot.
+A longer three-user test with six times the answers (protocol 6) was also inconclusive:
+
+{{#include ../results.md:clients-p6}}
+
+Two inconclusive results fit a very small trace with several users, or chance; a larger test or a better design is needed to tell. The run's disturbances are on [Measurements](../results.md#three-clients-with-six-times-the-answers-4-nov-protocol-6).
 
 ## Why measurements cannot prove timing is safe
 

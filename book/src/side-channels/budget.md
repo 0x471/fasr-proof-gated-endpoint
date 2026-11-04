@@ -64,7 +64,7 @@ Random spot checks can detect violations probabilistically, under the protocol's
 ## What is still open
 
 - What caused the no-spin timing trace, and whether a separate release core reduces it where a trace exists. On the hardened image a first test found no trace without spin, with or without a core of its own.
-- Whether several users at once open a timing channel. A larger registered test is planned.
+- Whether several users at once open a timing channel. Two registered tests, the second with six times the answers, were both inconclusive.
 - Whether packet details on the wire change with the server's behaviour.
 - How much room real language models leave for choosing among valid answers, and how a gate would supply the randomness.
 - Whether a restart should start the cap in a cooldown.
