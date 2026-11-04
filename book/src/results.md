@@ -476,6 +476,28 @@ Before collecting data, a Pi dry run showed `load_bits` sending late. EZKL's Pyt
 
 </details>
 
+### Three clients with six times the answers (4 Nov, protocol 6)
+
+Does the 0.1 s timing code get through fixed release when three clients ask at once? Protocol 5 was inconclusive at 258 answers, so protocol 6 repeated it with new bits and six times the answers. Pre-registered in `docs/EXPERIMENT_PROTOCOL_3.md`: the freeze candidate image (`c22954ee...`, fixed release, 4 s, 5 ms spin), three clients, 512 rounds or 1,536 answers per run, then an honest control.
+
+<!-- ANCHOR: clients-p6 -->
+| Analysis | Held-out errors, two halves | Held-out p | Control p | Mean difference (p) | Verdict |
+|---|---|---|---|---|---|
+| Registered, all answers | 0.47 / 0.48 | 0.043 | 0.77 | +9.3 ms (0.25), set by one delayed round | inconclusive |
+| Without the delayed round (exploratory, declared before analysis) | 0.47 / 0.49 | 0.042 | 0.77 | +0.029 ms (0.08) | inconclusive |
+<!-- ANCHOR_END: clients-p6 -->
+
+The reading was fixed in advance: inconclusive again means the question stays open. Both three-client tests landed between the rule's thresholds, which fits a very small trace or chance; this sample size doesn't separate them. Without the delayed round, the data allow a shift of at most 0.06 ms, at most 0.007 bit per answer under the Gaussian model, or about 19 bits an hour at three clients.
+
+<details><summary>What disturbed the runs, and the captures</summary>
+
+- During the timing run the laptop's network bridge to the Pi went away for about 7 seconds. The three replies of round 238 arrived 10.8 s after they were sent instead of about 4 s; every answer was still ok and the run counted under the rule. The exploratory row drops that round from both runs.
+- The first honest run was cut off when the cable was unplugged. Afterwards the endpoint did not reconnect to the test server, most likely because its old connection was left half open with nothing to send; the Pi was restarted and the control ran about an hour after the timing run, on a fresh boot. All of this was recorded before any analysis.
+- Mutual information with 4 bins: p = 0.03 with all answers, 0.056 without the delayed round; the control was clean (p = 0.34 and 0.41).
+- Packets: every reply was one 38-byte packet with TTL 64 and the same TCP window, in the timing run and in the honest runs. The timing capture holds 1,143 of the run's 1,536 replies (the outage and a restart left gaps).
+
+</details>
+
 ### Failure cap versus stopping (2 Nov, protocol 3)
 
 How much information remains, and how many answers are lost? Each run matched `observer/cap_model.py` reply for reply. Stopping leaked least but gave the server an off switch. Caps kept some answers flowing; the availability cost appeared only when the attacker caused failures.
