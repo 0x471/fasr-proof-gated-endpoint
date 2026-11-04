@@ -2,58 +2,67 @@
 
 > **In short**
 > - A proof fixes the content only if it leaves the server no choice about the answer.
-> - Real language models sample their words, so many answers are valid and the server could pick one.
-> - Pinning every source of freedom closes this; a model that hides messages itself is a different problem.
+> - When sampling allows several accepted outputs, the server may be able to encode a choice.
+> - Fixing that choice does not stop a model from hiding messages in its approved output.
 
 ## Why our test model has no such channel
 
-Our test model is small and deterministic: one question always gives exactly one answer. So a valid proof leaves the server no choice, and nothing can hide in the content. All the measurements in this book describe that setting.
+Our test model is deterministic: the same encoded input has one approved output. Under the proof and binding assumptions, the server cannot substitute a different output. This removes its choice of content, not information already present in the approved answer. All the measurements in this book describe that setting.
 
 ## Why real language models are different
 
-A language model gives probabilities for the next word. After "The weather today is", it might rate "nice" as most likely, then "sunny", then "lovely". An honest server rolls a random number and picks according to those probabilities.
+A language model scores possible next tokens, the pieces of text that make up words. For illustration, after "The weather today is", it might favour "nice", then "sunny", then "lovely". Sampling uses randomness to choose from the distribution. Greedy decoding instead takes the highest-scoring token.
 
-A hacked server could instead **choose** the word to carry bits. It might send the most likely word for a 0 and the second most likely for a 1. Cleverer schemes keep the text statistically normal, so it looks like honest random output. Every such answer is still a valid output of the approved model. A proof that only says "this text could come from the model" lets every choice through.
+A hacked server could choose the most likely token for a 0 and the second most likely for a 1. That simple code may change the distribution; more careful encodings can resemble ordinary sampling. A check that accepts both choices can leave room for this channel. A proof of exact sampling with fixed randomness would make a different claim.
 
 ## Every source of freedom must be pinned
 
-The real requirement is that **the proof leaves the server no choice about the output**. In real model serving, freedom comes from several places:
+To remove this channel, **the proof must fix the output** for the agreed input and settings. Possible sources of freedom need separate treatment:
 
 | Source of freedom | How it can be removed |
 |---|---|
-| Random word choice | the randomness comes from a seed the server cannot choose, for example derived from a nonce the gate supplies; or decoding always takes the most likely word |
-| Small numeric differences between GPU runs | prove an exact integer version of the model instead of tolerating small differences |
-| Tolerance in the check | accept only an exact match; any tolerance is room to hide bits |
+| Random token choice | use trusted randomness bound to the request, with fixed settings and controls on retries; or specify greedy decoding including ties |
+| Small numeric differences between runs on graphics processors (GPUs) | specify exact arithmetic; an integer model is one option, but changes the computation being approved |
+| Tolerance in the check | determine whether multiple distinguishable outputs can pass and be selected by the attacker; tolerance alone does not establish a usable channel |
 | Where the reply stops | the proof must cover the stopping rule |
-| Which valid proof is sent | never release or log the proof, since proofs are randomised |
+| Which valid proof is sent | discard proof bytes and hashes; randomised proofs can differ even for the same output |
 
 ## What exists today
 
-Proving a model's computation in zero knowledge ("zkML") has moved fast: from small image classifiers to models with hundreds of billions of parameters. The systems differ in exactly what this page is about: how much choice they leave the server. This summary comes from each system's own description, not from our runs.
+Zero-knowledge proofs of model computation, often called zkML, aim to check computation while hiding private data such as weights. The systems below make different claims about output choice. This table summarises their descriptions; we have not run or audited them.
 
-| System | How the next word is chosen | Weights hidden | Choice left to the server |
+| System | Output rule described | Weight privacy claimed | Limit of that claim |
 |---|---|---|---|
-| FlashProve (Anthropic, 2026) | always the top choice | yes | none, but only for greedy decoding |
-| DeepProve (Lagrange, 2026) | always the top choice | claimed | none, but only for greedy decoding |
-| zkLLM (Sun et al., 2024) | the paper proves the model's computation, not the drawing of the next word | yes | not covered |
-| Sable (MoonMath, 2026) | sampled, with a seed the server cannot choose | no | none |
-| VerInf (Petrie, 2026) | the observed text, checked against the model | yes | not removed, but measured: the proof states a bound |
+| [FlashProve][flashprove] | top token under exact match; a separate tolerance policy accepts alternatives | yes, with declared disclosures | only the checked token range; sampling is not covered, and reply-end checks remain external |
+| [DeepProve][deepprove] | computation through next-token argmax, meaning the highest score | yes | the README does not establish externally fixed sampling |
+| [zkLLM][zkllm] (Sun et al., 2024) | model computation; sampling is described, not specified as a proved draw from fixed randomness | yes | no demonstrated closure of sampling choice in this paper |
+| [Sable][sable] | greedy or sampled, fixed by the statement's inputs | no | the caller must fix those inputs, including the nonce and policy |
+| [VerInf][verinf] | bounds unexplained information in observed output | yes | bounds residual information rather than requiring one exact output |
 
-- **Rinberg et al. (2025)** name this channel. If the attacker can choose or steer the randomness, "the sampler itself becomes a covert channel". Their defence is randomness bound to the request that the attacker cannot influence. Token-DiFR (Karvonen et al., 2025) checks sampled words against a reference run with the same seed. It is a statistical check, not a proof.
-- **Sable** derives its seed from the client's nonce, the model commitment, the prompts and the settings, "so the server cannot choose the randomness". It is not zero-knowledge, however: many proofs together reveal the model's weights. Its proofs are also very large.
-- **FlashProve** and **DeepProve** hide the weights but prove only that each word is the model's top choice. They say nothing about sampling.
-- **VerInf** takes the other route. It does not remove the choice. It proves an upper bound on the "unexplained information": the bits per word that the model's computation does not account for. That bounds this channel, so it fits the budget view of [From channels to a budget](budget.md). In its largest demonstration the bound was just under one bit per word. By our arithmetic, a reply of a few hundred words could then still carry a key.
+- [Rinberg et al. (2025)](https://arxiv.org/abs/2511.02620) require trusted randomness bound to the request, with no attacker control through seeds, settings or retries. [Token-DiFR](https://arxiv.org/abs/2511.20621) checks outputs against a same-seed reference despite numerical variation. It is a statistical check, not a cryptographic proof.
+- Sable derives its seed from a client nonce, the model commitment, prompts and settings. A nonce is a value supplied to distinguish requests. Fixing these inputs prevents later seed choice, but does not make an attacker-controlled client trustworthy. Its integer model differs from the floating-point model, its proofs are large, and accumulated proofs can reveal weights.
+- FlashProve's [limits][flashlimits] distinguish exact match from its weaker tolerance policy. They also separate protocol theorems from the implementation and require the caller to check coverage and reply endings. DeepProve's README describes next-token argmax; that alone is not evidence that every serving choice is fixed.
+- VerInf reports a bound per token, not per word, on information the approved computation does not explain. Its reported bound does not rule out a short secret over enough tokens, but is not a demonstrated rate for transmitting one. The README calls it an unaudited prototype and warns that deployment must account for repeated attempts to obtain favourable proof challenges.
 
-No system we found removes the choice while keeping the weights secret: pinning the sampling randomness from outside, as Sable does, inside a zero-knowledge proof. VerInf comes closest by hiding the weights and measuring the choice. Petrie, Muhlhauser and Drotos (2026) state the general condition: their bound holds only if the proof system leaves "zero prover freedom".
+These descriptions do not establish a deployed, weight-private service that fixes every sampling choice against our attacker. That is a limit of this comparison, not a claim that no such system exists.
+
+Petrie, Muhlhauser and Drotos (2026) require fixed intermediate computations when proving predicted output probabilities. Otherwise the prover could change those probabilities and understate unexplained information. Their phrase "zero prover freedom" concerns that calculation; it does not require every permitted output to be deterministic.
 
 ## A different problem: the model hides messages itself
 
-Sometimes the hidden message is not the server's choice but the model's own. Language models can learn to hide messages in what they write. [Karpov et al. (2025)](https://arxiv.org/abs/2505.03439) found such skills rudimentary today, but much stronger when the model is given an explicit method.
+Sometimes the hidden message is not the server's choice but the model's own. [Karpov et al. (2025)](https://arxiv.org/abs/2505.03439) found rudimentary abilities in the models they tested, improving substantially with explicit guidance.
 
-Here the hidden message **is** the approved model's genuine answer. The proof correctly says the approved model produced it, so the endpoint must release it. Supplying the randomness does not help either, because the model shapes which words are likely in the first place.
+Here the hidden message is already part of an approved output. The proof can accept that content because it is consistent with the pinned computation. External randomness alone does not establish that the model's output contains no secret.
 
-So proof-gating guarantees **which model** answered, not that the model is harmless. Monitoring outputs, testing models and alignment work are the defences there. This is outside the endpoint's scope; see [Limitations](../limitations.md).
+A proof of output consistency does not establish which software actually ran, or that the approved model is harmless. Output monitoring, model testing and alignment address a separate problem. This is outside the endpoint's scope; see [Limitations](../limitations.md).
 
 ## Where this leaves our results
 
-Our measurements of timing, order and failures describe what remains **after** the content freedom is removed. A gate in front of a real model needs both: pinned content and controlled behaviour.
+Our timing, order and failure measurements assume the deterministic toy relation and correct binding. Applying them to a real model also requires fixing or bounding content choice. This prototype has not demonstrated that extension.
+
+[flashprove]: https://github.com/anthropics/FlashProve/blob/9e2bdd8ff5bf9c62f18263d7dac189b0400b260c/README.md
+[flashlimits]: https://github.com/anthropics/FlashProve/blob/9e2bdd8ff5bf9c62f18263d7dac189b0400b260c/docs/limits.md
+[deepprove]: https://github.com/Lagrange-Labs/deep-prove/blob/9d1a53e2ef49ffa2c902b8689cd3c58057a4e662/README.md
+[zkllm]: https://arxiv.org/abs/2404.16109
+[sable]: https://github.com/moonmath-ai/Sable/blob/0bc6b549afef2f8eb9b8bc4c2f24d6e554dbaacb/README.md
+[verinf]: https://github.com/JamesPetrie/VerInf/blob/7947bb9a6c7ec86ea97927c76370b3920b6269f6/README.md
