@@ -68,6 +68,9 @@ done
 grep -q '^[^#].*/sbin/getty' "$WORK/out/target/etc/inittab" && { echo "a login prompt is still in inittab" >&2; exit 1; }
 grep -q '^root:\*:' "$WORK/out/target/etc/shadow" || { echo "root login is not locked" >&2; exit 1; }
 [ ! -e "$WORK/out/target/lib/modules" ] || { echo "kernel modules are still on the image" >&2; exit 1; }
+for f in usr/bin/kmod bin/kmod usr/bin/xz; do
+  [ ! -e "$WORK/out/target/$f" ] || { echo "$f is still on the image" >&2; exit 1; }
+done
 grep -qx 'kernel.modules_disabled = 1' "$WORK/out/target/etc/sysctl.d/90-pge.conf" || { echo "module loading is not switched off" >&2; exit 1; }
 ! grep -q '^kernel\.io_uring' "$WORK/out/target/etc/sysctl.d/91-pge.conf" || { echo "io_uring's switch is set but io_uring isn't built" >&2; exit 1; }
 # The log lives on /tmp (RAM); a size cap keeps a flood of records from using up memory (K51).

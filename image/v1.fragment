@@ -8,6 +8,10 @@ BR2_SYSTEM_DHCP=""
 # mount 1 KiB blocks (the default for this size) on it. A fixed UUID and hash seed: mkfs picks random
 # ones, so every build would get another root hash on the kernel command line.
 BR2_TARGET_ROOTFS_EXT2_MKFS_OPTIONS="-O ^64bit -b 4096 -U 70676500-0000-4000-8000-000000000001 -E hash_seed=70676500-0000-4000-8000-000000000002"
+# Nothing on the image loads kernel modules, so the module tools and xz (used for compressed modules)
+# go too; the build host keeps its own kmod for the kernel build.
+# BR2_PACKAGE_KMOD is not set
+# BR2_PACKAGE_XZ is not set
 # The firewall (rules in the overlay's /etc/nftables.conf).
 BR2_PACKAGE_NFTABLES=y
 # No login anywhere: no getty on the console and a locked root account. Updates arrive as a new image
